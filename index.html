@@ -10,7 +10,16 @@
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- black-translucent tested live on a real device and confirmed to render
+     as a frosted white blur at the top of a Home Screen launch, not a
+     blend with the page underneath — this is the actual page consulted
+     for status bar style for the WHOLE standalone session (iOS reads it
+     once from the launch page, not per-page as you navigate), so this is
+     the one that matters, not login.html's own copy of this tag. "black"
+     is solid and never white/blurred; paired with a black-capped header/
+     overlay background below so the opaque bar meets dark content
+     seamlessly instead of a color mismatch. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -88,12 +97,15 @@
   /* ---------- header ---------- */
   /* Pinned at the top of every page (rather than scrolling away like the
      rest of the content) so there's always a dark backdrop sitting behind
-     the iOS status bar once it's translucent (see apple-mobile-web-app-
-     status-bar-style below) — without this, scrolling a light page like
-     Events would put the status bar's white clock/icons directly over a
-     pale background with nothing dark behind them. */
+     the iOS status bar — without this, scrolling a light page like Events
+     would put the status bar directly over a pale background. The status
+     bar itself is opaque "black" (see apple-mobile-web-app-status-bar-
+     style — black-translucent was tried and confirmed on a real device to
+     render as a frosted white blur, not a blend), so the header's own top
+     edge starts pure black too, meeting that solid bar seamlessly instead
+     of a visible ink-vs-black seam. */
   .site-head-wrap{position:sticky; top:0; z-index:50;}
-  header.site-head{background:var(--ink); color:var(--paper);}
+  header.site-head{background:linear-gradient(180deg, black 0%, var(--ink) 15%, var(--ink) 100%); color:var(--paper);}
   .head-inner{
     max-width:1080px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 1.4rem) 1.5rem 1.2rem;
     display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
@@ -1249,8 +1261,11 @@
        180deg (not a diagonal tilt): a tilted gradient reaches further
        down on one side than the other, which is barely visible over a
        whole screen but very visible across the narrow status bar row,
-       where it read as a left/right colour mismatch. */
-    background:linear-gradient(180deg, var(--ink) 0%, color-mix(in srgb, var(--ink) 55%, black) 60%, black 100%);
+       where it read as a left/right colour mismatch. Starts pure black at
+       0% (not var(--ink)) to meet the Home Screen status bar — forced to
+       opaque "black" style, not translucent, since translucent was
+       confirmed on a real device to render as a frosted white blur. */
+    background:linear-gradient(180deg, black 0%, var(--ink) 8%, color-mix(in srgb, var(--ink) 55%, black) 60%, black 100%);
     color:var(--paper);
     display:flex; flex-direction:column;
     font-family:var(--body);
@@ -1389,8 +1404,11 @@
        Straight 180deg, not a diagonal tilt — a tilted gradient reaches
        further down on one side than the other, invisible over a whole
        screen but very visible as a left/right mismatch across the narrow
-       status bar row. */
-    background:linear-gradient(180deg, var(--ink) 0%, color-mix(in srgb, var(--ink) 55%, black) 60%, black 100%);
+       status bar row. Starts pure black at 0% (not var(--ink)) to meet
+       the Home Screen status bar — forced to opaque "black" style, not
+       translucent, since translucent was confirmed on a real device to
+       render as a frosted white blur rather than a blend. */
+    background:linear-gradient(180deg, black 0%, var(--ink) 8%, color-mix(in srgb, var(--ink) 55%, black) 60%, black 100%);
     display:flex; flex-direction:column; font-family:var(--body);
     overflow-x:hidden; /* a fixed-position box has no overflow clipping of
       its own by default — without this, anything a descendant renders
