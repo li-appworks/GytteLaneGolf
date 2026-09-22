@@ -128,8 +128,14 @@ export default async (request, context) => {
       html = replaceInner(html, '<div class="society-loc" id="login-society-loc">', "</div>", esc(locBits));
       // --acc drives the pills/buttons/links; the body background gradient
       // is a plain hardcoded CSS rule (not a custom property) in this file,
-      // so it needs its own override rule, not just a variable.
-      const style = `<style>:root{--acc:${secondary};} body{background:linear-gradient(170deg, ${primary} 0%, #000000 100%);}</style>`;
+      // so it needs its own override rule, not just a variable. 180deg, not
+      // a tilted angle — a tilted gradient reaches further down on one side
+      // than the other, invisible over a full screen but very visible as a
+      // left/right mismatch across the narrow iOS status bar row (same bug
+      // already fixed in login.html's own CSS and applyLoginPageBranding(),
+      // missed here since this inline override runs before either loads and
+      // — being later in the document — wins the cascade over both).
+      const style = `<style>:root{--acc:${secondary};} body{background:linear-gradient(180deg, ${primary} 0%, #000000 100%);}</style>`;
       html = html.replace("</head>", `${style}</head>`);
     } else {
       html = replaceAttr(html, '<img id="site-crest" src="', '"', crestSrc);
