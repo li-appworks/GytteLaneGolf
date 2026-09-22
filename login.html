@@ -8,18 +8,13 @@
 <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
-<!-- black-translucent, not opaque "black" - reverted back after switching
-     to opaque black was confirmed live to still show as a hard solid
-     black rectangle (which is literally what "black" always draws,
-     working exactly as designed - the actual issue is that's not what's
-     wanted here). black-translucent is the one config that was previously
-     confirmed close to right ("no white, just a black fade at the top,
-     I don't mind it") - the standing theory now is that the specific
-     Home Screen icon being re-tested against is stuck on a stale
-     manifest/status-bar snapshot from an earlier add, which no amount of
-     further meta-tag guessing in this file can reach; see the note left
-     for the user about clearing Safari's site data for a genuinely
-     fresh icon. -->
+<!-- Matches index.html's own setup exactly. An earlier attempt at
+     black-translucent here was reverted after reportedly rendering as a
+     frosted white blur — but that was diagnosed with a stale Home Screen
+     icon/cache; once the user did a full power-cycle + fresh Add to Home
+     Screen, index.html's identical setup rendered correctly (full-height
+     colour, no white bar), confirming black-translucent itself was never
+     the problem. login.html's own copy of this tag was simply missing. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
