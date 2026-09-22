@@ -55,7 +55,12 @@
   }
 
   *{box-sizing:border-box;}
-  html{scroll-behavior:smooth; overflow-x:hidden;}
+  /* Safety net: html has no background of its own by default (white), so
+     any sliver the sticky header/body doesn't cover at the very top edge
+     of a standalone iOS launch (safe-area/viewport sizing can leave one)
+     shows plain white behind the translucent status bar instead of dark
+     — same fix already applied to login.html for the identical symptom. */
+  html{scroll-behavior:smooth; overflow-x:hidden; background:var(--ink);}
   @media (prefers-reduced-motion: reduce){
     html{scroll-behavior:auto;}
     *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
