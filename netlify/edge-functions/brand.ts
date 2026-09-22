@@ -135,7 +135,11 @@ export default async (request, context) => {
       // already fixed in login.html's own CSS and applyLoginPageBranding(),
       // missed here since this inline override runs before either loads and
       // — being later in the document — wins the cascade over both).
-      const style = `<style>:root{--acc:${secondary};} body{background:linear-gradient(180deg, ${primary} 0%, #000000 100%);}</style>`;
+      // Starts pure black at 0% to meet the Home Screen status bar (forced
+      // to "black" style, not translucent — see login.html's own meta tag
+      // comment for why) as black-on-black rather than this society's own
+      // colour starting right at the very top edge.
+      const style = `<style>:root{--acc:${secondary};} body{background:linear-gradient(180deg, #000000 0%, ${primary} 9%, #000000 100%);}</style>`;
       html = html.replace("</head>", `${style}</head>`);
     } else {
       html = replaceAttr(html, '<img id="site-crest" src="', '"', crestSrc);
