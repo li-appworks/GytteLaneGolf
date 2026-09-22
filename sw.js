@@ -33,16 +33,22 @@ self.addEventListener('fetch', event => {
   if (url.hostname === 'api.postcodes.io') return;
   if (url.hostname.endsWith('tile.openstreetmap.org')) return;
 
-  // Page loads: network first (so updates come through), cached copy if offline
+  // Page loads: network first (so updates come through), cached copy if offline.
+  // Cached under the request's own URL — was previously always cached (and
+  // matched, on offline fallback) under the fixed key '/index.html'
+  // regardless of which page was actually requested, so a navigation to
+  // login.html would overwrite index.html's own cache entry, and either
+  // page could serve the other's stale content the next time the network
+  // fetch failed on a flaky connection.
   if (req.mode === 'navigate'){
     event.respondWith(
       fetch(req)
         .then(res => {
           const copy = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy));
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match(req))
     );
     return;
   }
