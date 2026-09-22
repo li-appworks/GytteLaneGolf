@@ -31,6 +31,12 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;font-family:'Inter',system-ui,sans-serif;}
+/* Safety net: html has no background of its own by default (white), so
+   any sliver body's own box doesn't cover — e.g. 100dvh under-measuring
+   the true screen height in a standalone iOS launch with safe-area
+   insets — shows plain white instead of dark. Matches the gradient's own
+   darkest (black) end, so it's invisible when body does cover fully. */
+html{background:#000;}
 body{
   min-height:100vh;min-height:100dvh;
   background:linear-gradient(180deg,#4B1320 0%,#2a0b12 55%,#000000 100%);
