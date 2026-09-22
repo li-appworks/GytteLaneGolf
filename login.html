@@ -8,15 +8,16 @@
 <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
-<!-- Matches index.html's own setup exactly. An earlier attempt at
-     black-translucent here was reverted after reportedly rendering as a
-     frosted white blur — but that was diagnosed with a stale Home Screen
-     icon/cache; once the user did a full power-cycle + fresh Add to Home
-     Screen, index.html's identical setup rendered correctly (full-height
-     colour, no white bar), confirming black-translucent itself was never
-     the problem. login.html's own copy of this tag was simply missing. -->
+<!-- Deliberately NO apple-mobile-web-app-capable / status-bar-style here.
+     login.html is never itself the Home Screen launch target (index.html
+     is) — it's only ever reached by navigating out of the standalone app
+     or opening the link directly, which iOS opens in regular Safari (URL
+     bar visible). These tags being present made Safari itself paint a
+     solid black status-bar area (ignoring theme-color below) instead of
+     the intended maroon — confirmed live: removing them is the fix, not
+     another translucent/opaque variant. theme-color alone governs Safari's
+     own toolbar tint on a normal (non-standalone) page load. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* Defaults are Gytte Lane's own colours — applyLoginPageBranding() below
