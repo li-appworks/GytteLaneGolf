@@ -39,13 +39,17 @@ html,body{height:100%;font-family:'Inter',system-ui,sans-serif;}
 html{background:#000;}
 body{
   min-height:100vh;min-height:100dvh;
-  background:linear-gradient(180deg,#4B1320 0%,#2a0b12 55%,#000000 100%);
+  /* Brighter at the very top (0%) than the brand colour itself, then back
+     to it by 8% — compensates for black-translucent's own dark vibrancy
+     tint over whatever's underneath, so the status bar area doesn't read
+     as visibly darker than the rest of the page. */
+  background:linear-gradient(180deg,#6B1F2C 0%,#4B1320 8%,#2a0b12 55%,#000000 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2rem;
   padding:env(safe-area-inset-top,2.5rem) 1.4rem env(safe-area-inset-bottom,2rem);
   position:relative;overflow:hidden;
 }
-.overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(75,19,32,0.82) 0%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
+.overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(107,31,44,0.7) 0%,rgba(75,19,32,0.82) 8%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
 .glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,color-mix(in srgb, var(--acc) 14%, transparent) 0%,transparent 65%);pointer-events:none;}
 
 .top{display:flex;flex-direction:column;align-items:center;gap:1.4rem;position:relative;z-index:1;}
@@ -330,9 +334,13 @@ function applyLoginPageBranding(soc){
     else locEl.style.display = 'none';
   }
   const mid = darkenHex(primaryColour, 0.55);
-  document.body.style.background = `linear-gradient(180deg, ${primaryColour} 0%, ${mid} 55%, #000000 100%)`;
+  // Brighter than the brand colour right at 0%, back to it by 8% — same
+  // compensation as the static CSS above, for black-translucent's own
+  // dark vibrancy tint over the status bar area.
+  const top = lightenHex(primaryColour, 0.18);
+  document.body.style.background = `linear-gradient(180deg, ${top} 0%, ${primaryColour} 8%, ${mid} 55%, #000000 100%)`;
   const overlay = document.querySelector('.overlay');
-  if (overlay) overlay.style.background = `linear-gradient(180deg, ${primaryColour}D1 0%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
+  if (overlay) overlay.style.background = `linear-gradient(180deg, ${top}B3 0%, ${primaryColour}D1 8%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
 
   // Every remaining gold accent (pills, buttons, focus states, links —
   // see the :root defaults at the top of <style>) reads from these five
