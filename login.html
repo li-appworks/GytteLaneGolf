@@ -8,16 +8,16 @@
 <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
-<!-- Deliberately NO apple-mobile-web-app-capable / status-bar-style here.
-     login.html is never itself the Home Screen launch target (index.html
-     is) — it's only ever reached by navigating out of the standalone app
-     or opening the link directly, which iOS opens in regular Safari (URL
-     bar visible). These tags being present made Safari itself paint a
-     solid black status-bar area (ignoring theme-color below) instead of
-     the intended maroon — confirmed live: removing them is the fix, not
-     another translucent/opaque variant. theme-color alone governs Safari's
-     own toolbar tint on a normal (non-standalone) page load. -->
+<!-- Matches index.html's own now-working setup exactly: opaque "black",
+     not "black-translucent". A user has a separate Home Screen icon that
+     opens straight to this page (confirmed live) - removing the meta
+     entirely still rendered a solid black status-bar block on that icon,
+     not the "default" white bar its absence should produce, so leaving it
+     unset isn't a real fix either. Opaque black is deterministic (no
+     vibrancy blending to fight, unlike black-translucent) and is the one
+     config already proven to render correctly on index.html. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* Defaults are Gytte Lane's own colours — applyLoginPageBranding() below
@@ -40,17 +40,19 @@ html,body{height:100%;font-family:'Inter',system-ui,sans-serif;}
 html{background:#000;}
 body{
   min-height:100vh;min-height:100dvh;
-  /* Brighter at the very top (0%) than the brand colour itself, then back
-     to it by 8% — compensates for black-translucent's own dark vibrancy
-     tint over whatever's underneath, so the status bar area doesn't read
-     as visibly darker than the rest of the page. */
-  background:linear-gradient(180deg,#6B1F2C 0%,#4B1320 8%,#2a0b12 55%,#000000 100%);
+  /* Starts flat at the brand colour, not brightened — an opaque status bar
+     (see apple-mobile-web-app-status-bar-style below) draws a solid block
+     with no blending, so there's nothing to compensate for; brightening
+     the top here would just create a visible seam against that solid
+     block instead of removing one, which is what happened when this was
+     tuned for black-translucent's blend effect instead. */
+  background:linear-gradient(180deg,#4B1320 0%,#2a0b12 55%,#000000 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2rem;
   padding:env(safe-area-inset-top,2.5rem) 1.4rem env(safe-area-inset-bottom,2rem);
   position:relative;overflow:hidden;
 }
-.overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(107,31,44,0.7) 0%,rgba(75,19,32,0.82) 8%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
+.overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(75,19,32,0.82) 0%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
 .glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,color-mix(in srgb, var(--acc) 14%, transparent) 0%,transparent 65%);pointer-events:none;}
 
 .top{display:flex;flex-direction:column;align-items:center;gap:1.4rem;position:relative;z-index:1;}
@@ -335,13 +337,12 @@ function applyLoginPageBranding(soc){
     else locEl.style.display = 'none';
   }
   const mid = darkenHex(primaryColour, 0.55);
-  // Brighter than the brand colour right at 0%, back to it by 8% — same
-  // compensation as the static CSS above, for black-translucent's own
-  // dark vibrancy tint over the status bar area.
-  const top = lightenHex(primaryColour, 0.18);
-  document.body.style.background = `linear-gradient(180deg, ${top} 0%, ${primaryColour} 8%, ${mid} 55%, #000000 100%)`;
+  // Flat at the brand colour, not brightened — opaque black (see the
+  // status-bar-style meta tag) draws a solid block with no blending, so
+  // there's nothing to compensate for.
+  document.body.style.background = `linear-gradient(180deg, ${primaryColour} 0%, ${mid} 55%, #000000 100%)`;
   const overlay = document.querySelector('.overlay');
-  if (overlay) overlay.style.background = `linear-gradient(180deg, ${top}B3 0%, ${primaryColour}D1 8%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
+  if (overlay) overlay.style.background = `linear-gradient(180deg, ${primaryColour}D1 0%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
 
   // Every remaining gold accent (pills, buttons, focus states, links —
   // see the :root defaults at the top of <style>) reads from these five
