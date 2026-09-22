@@ -8,6 +8,8 @@
 <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* Defaults are Gytte Lane's own colours — applyLoginPageBranding() below
@@ -24,13 +26,13 @@
 html,body{height:100%;font-family:'Inter',system-ui,sans-serif;}
 body{
   min-height:100vh;min-height:100dvh;
-  background:linear-gradient(170deg,#4B1320 0%,#2a0b12 55%,#000000 100%);
+  background:linear-gradient(180deg,#4B1320 0%,#2a0b12 55%,#000000 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2rem;
   padding:env(safe-area-inset-top,2.5rem) 1.4rem env(safe-area-inset-bottom,2rem);
   position:relative;overflow:hidden;
 }
-.overlay{position:absolute;inset:0;background:linear-gradient(170deg,rgba(75,19,32,0.82) 0%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
+.overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(75,19,32,0.82) 0%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
 .glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,color-mix(in srgb, var(--acc) 14%, transparent) 0%,transparent 65%);pointer-events:none;}
 
 .top{display:flex;flex-direction:column;align-items:center;gap:1.4rem;position:relative;z-index:1;}
@@ -315,9 +317,9 @@ function applyLoginPageBranding(soc){
     else locEl.style.display = 'none';
   }
   const mid = darkenHex(primaryColour, 0.55);
-  document.body.style.background = `linear-gradient(170deg, ${primaryColour} 0%, ${mid} 55%, #000000 100%)`;
+  document.body.style.background = `linear-gradient(180deg, ${primaryColour} 0%, ${mid} 55%, #000000 100%)`;
   const overlay = document.querySelector('.overlay');
-  if (overlay) overlay.style.background = `linear-gradient(170deg, ${primaryColour}D1 0%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
+  if (overlay) overlay.style.background = `linear-gradient(180deg, ${primaryColour}D1 0%, ${mid}CC 55%, rgba(0,0,0,.85) 100%)`;
 
   // Every remaining gold accent (pills, buttons, focus states, links —
   // see the :root defaults at the top of <style>) reads from these five
