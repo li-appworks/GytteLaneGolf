@@ -8,8 +8,12 @@
 <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
 <link rel="manifest" id="site-manifest" href="">
 <meta name="theme-color" id="theme-color-meta" content="#4B1320">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- apple-mobile-web-app-status-bar-style:black-translucent was tried here
+     and reverted — on a real device it rendered as a frosted white blur at
+     the top of a Home Screen launch instead of blending with the page's
+     own gradient, a worse result than the plain default status bar this
+     page had before. viewport-fit=cover stays (predates this and isn't
+     the cause), just not paired with the translucent status bar style. -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* Defaults are Gytte Lane's own colours — applyLoginPageBranding() below
