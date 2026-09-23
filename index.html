@@ -1216,6 +1216,12 @@
   }
   .membership-pill.paid{background:var(--bracken); color:var(--paper);}
   .membership-pill.unpaid{background:var(--line); color:var(--text-muted);}
+  .inapp-tag{
+    display:inline-block; font-family:var(--body); font-size:.62rem; font-weight:600;
+    text-transform:uppercase; letter-spacing:.05em; line-height:1;
+    padding:.2rem .45rem; border-radius:999px; vertical-align:middle;
+    color:var(--ink); border:1px solid var(--brass); background:color-mix(in srgb, var(--brass) 14%, transparent);
+  }
 
   /* ---------- footer ---------- */
   footer{background:var(--ink); color:var(--on-dark-muted);}
@@ -2785,6 +2791,11 @@ function isSignedUp(eventId, playerId){
    again un-cancels it, whether or not an admin has touched the row. */
 function isCancelledPayment(rec){ return !!rec?.cancelled_at && !isSignedUp(rec.event_id, rec.player_id); }
 function cardPaymentsEnabled(){ return !!currentSociety?.stripe_enabled; }
+/* payment_method is 'in_app' (paid through the app's payment system — has a
+   fee, refunded through Stripe) or 'other' (anything else). Only in-app gets
+   a visible tag; 'other' is the unremarkable default. */
+function isInApp(rec){ return rec?.payment_method === 'in_app'; }
+const IN_APP_TAG = '<span class="inapp-tag">In-app</span>';
 
 function attendeePillLi(p, eventId, isLoggedIn, isPaid, fee){
   return `<li style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
@@ -2818,17 +2829,18 @@ function cancelledPaymentsHtml(e){
       const p = players.find(x => x.id === rec.player_id);
       if (!p) return '';
       const fullyRefunded = refundedAmount(rec) >= Number(rec.amount || 0);
-      const isCard = rec.payment_method === 'stripe';
+      const inApp = isInApp(rec);
       let action = '';
       if (isLoggedIn && !fullyRefunded){
-        action = isCard
+        action = inApp
           ? `<span class="muted" style="font-size:.75rem;">Refund in Stripe — updates here automatically</span>`
           : `<button class="committee-edit-btn" onclick="recordManualRefund(${rec.id})">Record refund</button>`;
       }
       return `<li style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap;">
         <span style="text-decoration:line-through; color:var(--text-muted);">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
         <span style="display:flex; align-items:center; gap:.5rem; font-size:.8rem;">
-          <span style="color:${fullyRefunded ? 'var(--bracken)' : 'var(--claret)'};">${refundStatusText(rec, isLoggedIn)}${isLoggedIn ? ` · ${isCard ? 'card' : 'bank'}` : ''}</span>
+          ${inApp && isLoggedIn ? IN_APP_TAG : ''}
+          <span style="color:${fullyRefunded ? 'var(--bracken)' : 'var(--claret)'};">${refundStatusText(rec, isLoggedIn)}</span>
           ${action}
         </span>
       </li>`;
@@ -2841,8 +2853,8 @@ function refreshRefunds(then){
     .then(({ data }) => { if (data){ refunds = data; then && then(); } });
 }
 
-/* Admin records a bank-transfer refund by hand (card refunds come in from
-   Stripe's webhook instead). */
+/* Admin records a refund of an 'other' payment by hand (in-app refunds come
+   in from Stripe's webhook instead). */
 async function recordManualRefund(paymentId){
   const rec = eventPayments.find(p => p.id === paymentId);
   if (!rec || !db) return;
@@ -2857,7 +2869,7 @@ async function recordManualRefund(paymentId){
   const refundedDate = new Date().toISOString().slice(0, 10);
   const { data: refund, error } = await db.from('refunds').insert({
     society_id: societyId, event_id: rec.event_id, player_id: rec.player_id,
-    amount, refunded_date: refundedDate, method: 'manual'
+    amount, refunded_date: refundedDate, method: 'other'
   }).select().single();
   if (error){ console.error('Record refund error:', error); alert('Could not record the refund — please try again.'); return; }
   const newTotal = refundedAmount(rec) + amount;
@@ -2873,7 +2885,7 @@ async function recordManualRefund(paymentId){
   rec.refunded_amount = newTotal;
   rec.refunded_date = refundedDate;
   refunds.push(refund);
-  logActivity('refund_recorded', { event_id: rec.event_id, player_id: rec.player_id, amount, method: 'manual' });
+  logActivity('refund_recorded', { event_id: rec.event_id, player_id: rec.player_id, amount, method: 'other' });
   renderEvents();
   if (typeof renderAccounts === 'function') renderAccounts();
 }
@@ -3092,11 +3104,11 @@ function eventDetailHtml(e){
                       const isPaid = rec && isPaidRecord(rec);
                       const amount = rec ? Number(rec.amount||fee) : fee;
                       return `<div class="payment-row ${isPaid?'paid':''}" data-event="${e.id}" data-player="${p.id}">
-                        <input type="checkbox" ${isPaid?'checked':''} onchange="togglePayment('${e.id}',${p.id},'${amount.toFixed(2)}',this.checked)">
-                        <span class="pay-name">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
+                        <input type="checkbox" ${isPaid?'checked':''} ${isPaid && isInApp(rec) ? 'disabled title="Paid in-app — refunds are made in Stripe"' : ''} onchange="togglePayment('${e.id}',${p.id},'${amount.toFixed(2)}',this.checked)">
+                        <span class="pay-name">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}${isPaid && isInApp(rec) ? ' ' + IN_APP_TAG : ''}</span>
                         <div style="display:flex; align-items:center; gap:.3rem; margin-left:auto;">
                           <span style="font-family:var(--body); font-size:.8rem; color:var(--text-muted);">£</span>
-                          <input id="pay-amt-${e.id}-${p.id}" type="number" step="0.01" min="0" value="${amount.toFixed(2)}"
+                          <input id="pay-amt-${e.id}-${p.id}" type="number" step="0.01" min="0" value="${amount.toFixed(2)}" ${isPaid && isInApp(rec) ? 'disabled' : ''}
                             style="width:4.5rem; font-family:var(--body); font-size:.82rem; padding:.25rem .4rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--stone); text-align:right;"
                             onchange="updatePaymentAmount('${e.id}',${p.id},this.value)">
                         </div>
@@ -3169,11 +3181,11 @@ function eventDetailHtml(e){
                   const isPaid = rec && isPaidRecord(rec);
                   const amount = rec ? Number(rec.amount||fee) : fee;
                   return `<div class="payment-row ${isPaid?'paid':''}" data-event="${e.id}" data-player="${p.id}">
-                    <input type="checkbox" ${isPaid?'checked':''} onchange="togglePayment('${e.id}',${p.id},'${amount.toFixed(2)}',this.checked)">
-                    <span class="pay-name">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
+                    <input type="checkbox" ${isPaid?'checked':''} ${isPaid && isInApp(rec) ? 'disabled title="Paid in-app — refunds are made in Stripe"' : ''} onchange="togglePayment('${e.id}',${p.id},'${amount.toFixed(2)}',this.checked)">
+                    <span class="pay-name">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}${isPaid && isInApp(rec) ? ' ' + IN_APP_TAG : ''}</span>
                     <div style="display:flex; align-items:center; gap:.3rem; margin-left:auto;">
                       <span style="font-family:var(--body); font-size:.8rem; color:var(--text-muted);">£</span>
-                      <input id="pay-amt-${e.id}-${p.id}" type="number" step="0.01" min="0" value="${amount.toFixed(2)}"
+                      <input id="pay-amt-${e.id}-${p.id}" type="number" step="0.01" min="0" value="${amount.toFixed(2)}" ${isPaid && isInApp(rec) ? 'disabled' : ''}
                         style="width:4.5rem; font-family:var(--body); font-size:.82rem; padding:.25rem .4rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--stone); text-align:right;"
                         onchange="updatePaymentAmount('${e.id}',${p.id},this.value)">
                     </div>
@@ -3240,9 +3252,9 @@ async function removeSignup(eventId, playerId){
   const name = p ? `${p.first_name} ${p.last_name}` : 'this player';
   const payment = eventPayments.find(x => String(x.event_id) === String(eventId) && x.player_id === playerId);
   const hasPaid = isPaidRecord(payment);
-  const isCard = payment?.payment_method === 'stripe';
+  const inApp = isInApp(payment);
   const question = hasPaid
-    ? `${name} has paid £${Number(payment.amount).toFixed(2)} ${isCard ? 'by card' : 'by bank transfer'}.\n\nRemove them from this event? They'll be listed as cancelled, and the refund will show against them once it's made.`
+    ? `${name} has paid £${Number(payment.amount).toFixed(2)}${inApp ? ' in-app' : ''}.\n\nRemove them from this event? They'll be listed as cancelled, and the refund will show against them once it's made.`
     : `Remove ${name} from this event?`;
   if (!confirm(question)) return;
   if (!db) return;
@@ -3261,7 +3273,7 @@ async function removeSignup(eventId, playerId){
     if (payError) console.warn('Could not mark payment as cancelled:', payError);
     else payment.cancelled_at = cancelledAt;
     logActivity('signup_cancelled', { event_id: eventId, player_id: playerId, paid: true, method: payment.payment_method });
-    if (isCard) alert(`Now refund ${name} in the Stripe dashboard (Payments → find the payment → Refund). It will show as refunded here automatically.`);
+    if (inApp) alert(`Now refund ${name} in the Stripe dashboard (Payments → find the payment → Refund). It will show as refunded here automatically.`);
   } else {
     /* Unpaid: drop the payment record, otherwise it's left orphaned and still
        counts as "outstanding" on the Accounts page. */
@@ -5337,7 +5349,7 @@ function myAccountSignupsTab(p){
         </div>
         <div class="pli-right">
           ${!fee ? '' : isPaid
-            ? `<span class="membership-pill paid">Paid</span>`
+            ? `${isInApp(rec) ? IN_APP_TAG + ' ' : ''}<span class="membership-pill paid">Paid</span>`
             : cardPaymentsEnabled()
               ? `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${ev.id}',${p.id},this)">Pay now</button>`
               : `<span class="membership-pill unpaid">Not paid</span>`}
@@ -5358,15 +5370,15 @@ function myRefundsHtml(p){
     const ev = eventById(eid);
     const rec = cancelled.find(r => String(r.event_id) === eid);
     const lines = myRefunds.filter(r => String(r.event_id) === eid).map(r =>
-      `Refunded £${Number(r.amount).toFixed(2)} on ${fmtDate(r.refunded_date)} (${r.method === 'stripe' ? 'to your card' : 'bank transfer'})`);
-    if (rec && !lines.length) lines.push(refundStatusText(rec, true));
+      `${escapeHtml(`Refunded £${Number(r.amount).toFixed(2)} on ${fmtDate(r.refunded_date)}`)}${r.method === 'in_app' ? ' ' + IN_APP_TAG : ''}`);
+    if (rec && !lines.length) lines.push(escapeHtml(refundStatusText(rec, true)));
     const status = rec ? `Cancelled${rec.cancelled_at ? ` ${fmtDate(rec.cancelled_at.slice(0, 10))}` : ''}` : '';
     return `
       <div class="player-list-item" style="cursor:default;">
         <div class="pli-info">
           <div class="pli-name">${escapeHtml(ev ? ev.name : 'Event')}</div>
           <div class="pli-sub">${[ev ? fmtDate(ev.date) : '', status].filter(Boolean).join(' · ')}</div>
-          ${lines.map(l => `<div class="pli-sub">${escapeHtml(l)}</div>`).join('')}
+          ${lines.map(l => `<div class="pli-sub">${l}</div>`).join('')}
         </div>
       </div>`;
   }).join('');
@@ -8912,7 +8924,7 @@ async function togglePayment(eventId, playerId, amountOrEl, paid){
     /* Re-joined after a full refund: this is a new payment, so clear the old
        refund/cancellation state (the refunds table keeps the history). */
     if (paid && refundedAmount(existing) > 0 && refundedAmount(existing) >= Number(existing.amount || 0)){
-      Object.assign(changes, { payment_method: 'manual', cancelled_at: null, refunded_amount: 0, refunded_date: null, stripe_session_id: null, stripe_payment_intent: null });
+      Object.assign(changes, { payment_method: 'other', cancelled_at: null, refunded_amount: 0, refunded_date: null, stripe_session_id: null, stripe_payment_intent: null, stripe_fee: null });
     }
     const { error } = await db.from('event_payments').update(changes).eq('id', existing.id);
     if (error){ console.error('Update error:', error); alert('Could not save: ' + error.message); return; }
@@ -9366,7 +9378,32 @@ function eventIncome(e, fee, signedUpCount){
   const outstanding = active.length
     ? active.reduce((s,p) => s + (isPaidRecord(p) ? 0 : Number(p.amount || fee)), 0)
     : signedUpCount * fee;
-  return { collected, expected: collected + outstanding, outstanding, paidCount, refundedTotal };
+  const inApp = all.filter(isInApp);
+  const inAppCollected = inApp.reduce((s,p) => s + netCollected(p), 0);
+  /* Stripe keeps its fee even when a payment is refunded, so every in-app
+     payment's fee counts. */
+  const inAppFees = inApp.reduce((s,p) => s + Number(p.stripe_fee || 0), 0);
+  return { collected, expected: collected + outstanding, outstanding, paidCount, refundedTotal,
+           inAppCollected, inAppFees, inAppCount: inApp.length };
+}
+
+/* "· £660 in-app (fees £11.10)" — only when there were in-app payments. */
+function inAppIncomeNote(inc){
+  if (!inc.inAppCount) return '';
+  return ` · £${inc.inAppCollected.toFixed(2)} in-app${inc.inAppFees > 0 ? ` (fees £${inc.inAppFees.toFixed(2)})` : ''}`;
+}
+
+const IN_APP_FEE_CATEGORY = 'in-app payment fees';
+/* In-app payment fees as expenditure lines, one per event — computed from
+   the payments, never stored in the expenditures table. */
+function inAppFeeExpenses(yearEvents){
+  return yearEvents.map(e => {
+    const inc = eventIncome(e, 0, 0);
+    return inc.inAppFees > 0 ? {
+      description: `${e.name} — ${inc.inAppCount} in-app payment${inc.inAppCount === 1 ? '' : 's'}`,
+      amount: inc.inAppFees, category: IN_APP_FEE_CATEGORY, date: e.date, year: new Date(e.date+'T00:00:00').getFullYear()
+    } : null;
+  }).filter(Boolean);
 }
 
 function renderAccounts(){
@@ -9418,10 +9455,11 @@ function renderAccounts(){
   const incomeRows = yearEvents.map(e => {
     const fee = parseFloat((e.cost||'').replace(/[^0-9.]/g,'')) || 0;
     const signedUp = signupsForEvent(e.id).length;
-    const { collected, expected, outstanding, paidCount, refundedTotal } = eventIncome(e, fee, signedUp);
+    const inc = eventIncome(e, fee, signedUp);
+    const { collected, expected, outstanding, paidCount, refundedTotal } = inc;
     return {
       label: e.name,
-      sub: `${paidCount}/${signedUp} paid · £${collected.toFixed(2)} collected${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}${outstanding > 0 ? ` · £${outstanding.toFixed(2)} outstanding` : ''}`,
+      sub: `${paidCount}/${signedUp} paid · £${collected.toFixed(2)} collected${inAppIncomeNote(inc)}${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}${outstanding > 0 ? ` · £${outstanding.toFixed(2)} outstanding` : ''}`,
       amount: collected,
       expected,
       outstanding
@@ -9437,8 +9475,8 @@ function renderAccounts(){
   }
   const totalIncome = incomeRows.reduce((s,r) => s + r.amount, 0);
 
-  /* expenditure for this year */
-  const yearExp = expenditures.filter(x => x.year === accountsYear);
+  /* expenditure for this year, plus in-app payment fees */
+  const yearExp = [...expenditures.filter(x => x.year === accountsYear), ...inAppFeeExpenses(yearEvents)];
   const totalExp = yearExp.reduce((s,x) => s + Number(x.amount||0), 0);
   const surplus = totalIncome - totalExp;
 
@@ -9449,7 +9487,8 @@ function renderAccounts(){
 
   /* expenditure by category */
   const expByCat = {};
-  EXPENSE_CATEGORIES.forEach(c => expByCat[c] = []);
+  const expCats = [...EXPENSE_CATEGORIES, IN_APP_FEE_CATEGORY];
+  expCats.forEach(c => expByCat[c] = []);
   yearExp.forEach(x => (expByCat[x.category] = expByCat[x.category]||[]).push(x));
 
   el.innerHTML = `
@@ -9490,12 +9529,12 @@ function renderAccounts(){
 
       <div class="accounts-section">
         <h3>Expenditure</h3>
-        ${EXPENSE_CATEGORIES.filter(c => expByCat[c]?.length).map(cat => `
+        ${expCats.filter(c => expByCat[c]?.length).map(cat => `
           <div style="margin-bottom:.6rem;">
             <div style="font-family:var(--body); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin:.5rem 0 .3rem;">${cat}</div>
             ${expByCat[cat].map(x => `
               <div class="accounts-row">
-                <span class="ar-label">${x.description}${x.date ? '<br><span class="ar-sub">'+fmtDate(x.date)+'</span>' : ''}</span>
+                <span class="ar-label">${escapeHtml(x.description)}${x.date ? '<br><span class="ar-sub">'+fmtDate(x.date)+'</span>' : ''}</span>
                 <span class="ar-amount expense">£${Number(x.amount).toFixed(2)}</span>
               </div>`).join('')}
           </div>`).join('')}
@@ -9527,7 +9566,7 @@ function renderAccounts(){
 
     <div style="margin-top:2rem; padding-top:1.6rem; border-top:1px solid var(--line);">
       <h3 class="mini-title" style="margin-bottom:1rem;">Expenditure log — ${accountsYear}</h3>
-      ${yearExp.map(x => {
+      ${yearExp.filter(x => x.id != null).map(x => {
         if (editingExpenditureIds.has(x.id)) return expenditureEditFormHtml(x);
         return `<div class="accounts-row">
           <span class="ar-label">${x.description} <span class="exp-category-pill">${x.category}</span>${x.recurring_id ? ' <span class="exp-category-pill" style="background:var(--brass-light); color:var(--ink);" title="Generated by a recurring expenditure">&#8635; recurring</span>' : ''}${x.date?'<br><span class="ar-sub">'+fmtDate(x.date)+'</span>':''}</span>
@@ -9768,9 +9807,10 @@ async function downloadAccountsPdf(year){
   const incomeRows = yearEvents.map(e => {
     const fee = parseFloat((e.cost||'').replace(/[^0-9.]/g,'')) || 0;
     const signedUp = signupsForEvent(e.id).length;
-    const { collected, outstanding, paidCount, refundedTotal } = eventIncome(e, fee, signedUp);
+    const inc = eventIncome(e, fee, signedUp);
+    const { collected, outstanding, paidCount, refundedTotal } = inc;
     return collected > 0 || outstanding > 0
-      ? { label: e.name, sub: `${paidCount}/${signedUp} paid${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}`, amount: collected, outstanding }
+      ? { label: e.name, sub: `${paidCount}/${signedUp} paid${inAppIncomeNote(inc)}${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}`, amount: collected, outstanding }
       : null;
   }).filter(Boolean);
   const membersPaidPdf = players.filter(p => p.membership_paid_year === yr);
@@ -9779,10 +9819,11 @@ async function downloadAccountsPdf(year){
   const totalOutstanding = incomeRows.reduce((s,r) => s + (r.outstanding || 0), 0);
 
   /* expenditure — grouped by category, matching the on-screen report */
-  const yearExp = expenditures.filter(x => x.year === yr);
+  const yearExp = [...expenditures.filter(x => x.year === yr), ...inAppFeeExpenses(yearEvents)];
   const totalExp = yearExp.reduce((s,x) => s + Number(x.amount||0), 0);
   const expByCat = {};
-  EXPENSE_CATEGORIES.forEach(c => expByCat[c] = []);
+  const expCats = [...EXPENSE_CATEGORIES, IN_APP_FEE_CATEGORY];
+  expCats.forEach(c => expByCat[c] = []);
   yearExp.forEach(x => (expByCat[x.category] = expByCat[x.category] || []).push(x));
 
   const surplus = totalIncome - totalExp;
@@ -9838,7 +9879,7 @@ async function downloadAccountsPdf(year){
   doc.setFont('helvetica','bold'); doc.setFontSize(11);
   doc.text('PAYMENTS', LABEL_X, y); y += 7;
   doc.setFontSize(10);
-  const catsUsed = EXPENSE_CATEGORIES.filter(c => expByCat[c]?.length);
+  const catsUsed = expCats.filter(c => expByCat[c]?.length);
   if (!catsUsed.length){
     doc.setFont('helvetica','italic'); doc.text('No payments recorded for this year.', LABEL_X, y); doc.setFont('helvetica','normal'); y += 6;
   }
