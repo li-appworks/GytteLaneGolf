@@ -36,7 +36,11 @@ html,body{height:100%;font-family:'Inter',system-ui,sans-serif;}
    the true screen height in a standalone iOS launch with safe-area
    insets — shows plain white instead of dark. Matches the gradient's own
    darkest (black) end, so it's invisible when body does cover fully. */
-html{background:#000;}
+html{background-color:#4B1320;}
+/* iOS 26 Safari/Home Screen apps colour the status-bar strip from the root
+   background-color (gradients are ignored; unset = white). Must be the brand
+   colour, not black — applyLoginPageBranding() and the edge function set it
+   per society. */
 body{
   min-height:100vh;min-height:100dvh;
   /* Brighter at the very top (0%) than the brand colour itself, then back
@@ -337,6 +341,7 @@ function applyLoginPageBranding(soc){
   // Brighter than the brand colour right at 0%, back to it by 8% — same
   // compensation as the static CSS above, for black-translucent's own
   // dark vibrancy tint over the status bar area.
+  document.documentElement.style.backgroundColor = primaryColour;
   const top = lightenHex(primaryColour, 0.18);
   document.body.style.background = `linear-gradient(180deg, ${top} 0%, ${primaryColour} 8%, ${mid} 55%, #000000 100%)`;
   const overlay = document.querySelector('.overlay');
