@@ -2,6 +2,7 @@
 //   checkout.session.completed -> marks the event_payments row paid
 //                                 ('in_app'), with Stripe's actual fee
 //   charge.refunded            -> records each refund and the refunded total
+//   charge.updated             -> fills in the fee once Stripe attaches it
 // Refunds are issued in the Stripe dashboard; this is what makes them show
 // up against the player in the app without anyone re-entering them.
 //
@@ -38,8 +39,9 @@ const dateOf = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString
 const idOf = (x: string | { id: string } | null | undefined) => (typeof x === "string" ? x : x?.id ?? null);
 
 // What Stripe actually charged for this payment (varies by card type), from
-// the charge's balance transaction. Null if it isn't available yet — the
-// payment is still recorded; only the fee line in Accounts misses it.
+// the charge's balance transaction. Stripe often attaches that a few seconds
+// AFTER checkout.session.completed (then sends charge.updated), so this is
+// frequently null at payment time — fillMissingFee() picks it up later.
 async function actualFee(paymentIntentId: string): Promise<number | null> {
   try {
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
@@ -52,6 +54,23 @@ async function actualFee(paymentIntentId: string): Promise<number | null> {
     console.error("Could not look up Stripe fee:", err);
     return null;
   }
+}
+
+// On any later charge event (charge.updated when the fee lands, or
+// charge.refunded), record the fee if we don't have it yet.
+async function fillMissingFee(charge: Stripe.Charge): Promise<void> {
+  const paymentIntent = idOf(charge.payment_intent);
+  const btId = idOf(charge.balance_transaction as string | { id: string } | null);
+  if (!paymentIntent || !btId) return;
+  const { data: payment } = await supabase
+    .from("event_payments")
+    .select("id, stripe_fee")
+    .eq("stripe_payment_intent", paymentIntent)
+    .maybeSingle();
+  if (!payment || payment.stripe_fee != null) return;
+  const bt = await stripe.balanceTransactions.retrieve(btId);
+  const { error } = await supabase.from("event_payments").update({ stripe_fee: bt.fee / 100 }).eq("id", payment.id);
+  if (error) console.error("Could not record Stripe fee:", error);
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<Response> {
@@ -158,7 +177,12 @@ Deno.serve(async (req) => {
       return await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
     }
     if (event.type === "charge.refunded") {
+      await fillMissingFee(event.data.object as Stripe.Charge);
       return await handleChargeRefunded(event.data.object as Stripe.Charge);
+    }
+    if (event.type === "charge.updated") {
+      await fillMissingFee(event.data.object as Stripe.Charge);
+      return ok();
     }
     return ok();
   } catch (err) {

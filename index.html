@@ -2798,8 +2798,9 @@ function isInApp(rec){ return rec?.payment_method === 'in_app'; }
 const IN_APP_TAG = '<span class="inapp-tag">In-app</span>';
 
 function attendeePillLi(p, eventId, isLoggedIn, isPaid, fee){
+  const inApp = isPaid && isInApp(eventPayments.find(x => String(x.event_id) === String(eventId) && x.player_id === p.id));
   return `<li style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
-    <span>${isPaid ? '<span class="paid-tick">✓</span>' : ''}${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
+    <span>${isPaid ? '<span class="paid-tick">✓</span>' : ''}${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}${inApp ? ' ' + IN_APP_TAG : ''}</span>
     <span style="display:flex; gap:.4rem; flex-shrink:0;">
       ${!isPaid && fee > 0 && cardPaymentsEnabled() ? `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${eventId}',${p.id},this)">Pay now</button>` : ''}
       ${isLoggedIn ? `<button class="committee-edit-btn" style="color:var(--claret); border-color:var(--claret);" onclick="removeSignup('${eventId}',${p.id})">✕ Remove</button>` : ''}
