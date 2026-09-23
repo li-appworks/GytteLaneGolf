@@ -52,6 +52,10 @@ body{
   position:relative;overflow:hidden;
 }
 .overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(75,19,32,0.82) 0%,rgba(75,19,32,0.82) 8%,rgba(20,8,14,0.80) 55%,rgba(0,0,0,0.85) 100%);pointer-events:none;z-index:0;}
+/* iOS 26 Safari tints its bottom toolbar from a fixed element's
+   background-color within 3px of the bottom edge (>=80% wide, >=3px high),
+   else from the root colour (maroon). The page ends in black, so match that. */
+.chin-tint{position:fixed;left:0;bottom:-8px;width:100%;height:12px;background-color:#000;pointer-events:none;}
 .glow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(circle,color-mix(in srgb, var(--acc) 14%, transparent) 0%,transparent 65%);pointer-events:none;}
 
 .top{display:flex;flex-direction:column;align-items:center;gap:1.4rem;position:relative;z-index:1;}
@@ -105,6 +109,7 @@ body{
 <body>
 
 <div class="overlay"></div>
+<div class="chin-tint" aria-hidden="true"></div>
 <div class="glow"></div>
 
 <div class="top">
