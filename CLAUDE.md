@@ -9,6 +9,7 @@ The website for Gytte Lane Golf Society (Syresham, Northamptonshire, founded 199
 - `index.html` — the entire site (~7,600 lines: all pages, styles, and JS in one file)
 - `login.html` — the only sign-in surface (see Auth below); `index.html` has no login UI of its own, it links out to this page
 - `sw.js` — service worker for offline support
+- `payments.html` — public "Payments & refunds" policy page (linked from the site footer; Stripe needs a visible refund policy and contact details). Static wording, with the society name/location/contact email/colour swapped in client-side via the same custom-domain → subdomain → oldest resolution as the other pages. Wording approved by the treasurer 2026-09-23 — change it only with their say-so.
 - `docs/architecture.html` — hand-built SVG component/infrastructure diagram, kept up to date as services are added (e.g. Stripe, Resend) — see "Third-party services" below for the current list
 - `supabase/functions/` — the project's only server-side code: two Deno Edge Functions (`create-checkout-session`, `stripe-webhook`) for Stripe, deployed via the Supabase Management API (no CLI/Docker on the dev machine — see Payments below)
 - `CHANGELOG.md` — **frozen as of Phase 12 (2026-07-12) and explicitly not maintained further** (says so at the top of the file itself). Useful for *why* early decisions were made, but everything since is CLAUDE.md-only — if you change something, document it here, not there.

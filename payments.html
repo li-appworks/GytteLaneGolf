@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Payments &amp; refunds — Gytte Lane Golf Society</title>
+<meta name="description" content="How event payments and refunds work at Gytte Lane Golf Society.">
+<meta name="theme-color" content="#4B1320">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#4B1320;
+    --stone:#ECEBE1;
+    --paper:#FAF8F2;
+    --brass:#B8862F;
+    --line:#D8D5C6;
+    --text:#26241F;
+    --text-muted:#5B5A52;
+    --on-dark-muted:#D9C2C4;
+    --radius:6px;
+  }
+  *{box-sizing:border-box;}
+  /* iOS 26 colours the status bar and bottom toolbar from the root
+     background-color (not gradients or theme-color; unset = white). The
+     header and footer are both --ink, so the root is too. */
+  html{background-color:var(--ink);}
+  body{
+    margin:0; min-height:100vh; display:flex; flex-direction:column;
+    background:var(--stone); color:var(--text);
+    font-family:'Inter', system-ui, sans-serif; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--ink); text-underline-offset:2px;}
+  a:hover{color:var(--brass);}
+  :focus-visible{outline:3px solid var(--brass); outline-offset:2px; border-radius:2px;}
+
+  header{background:var(--ink); color:var(--paper);}
+  .head-inner{
+    max-width:760px; margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 1.2rem) 16px 1.1rem;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+  }
+  .society{margin:0; font-weight:700; font-size:1.15rem; letter-spacing:-.01em;}
+  .society-loc{margin:.1rem 0 0; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; color:var(--brass);}
+  .back{color:var(--paper); font-size:.85rem; text-decoration:none; opacity:.85; white-space:nowrap;}
+  .back:hover{color:var(--paper); opacity:1; text-decoration:underline;}
+  .stripe-band{height:3px; background:var(--brass);}
+
+  main{flex:1; width:100%; max-width:760px; margin:0 auto; padding:2rem 16px 3rem;}
+  .eyebrow{margin:0 0 .3rem; font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:var(--text-muted);}
+  h1{margin:0 0 1.6rem; font-size:clamp(1.7rem, 5vw, 2.3rem); font-weight:800; letter-spacing:-.03em; line-height:1.15; color:var(--ink); text-wrap:balance;}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:1.4rem 1.4rem .6rem;}
+  section + section{margin-top:1.4rem; padding-top:1.4rem; border-top:1px solid var(--line);}
+  h2{margin:0 0 .5rem; font-size:1.05rem; font-weight:700; color:var(--ink);}
+  p{margin:0 0 .9rem; max-width:65ch;}
+  address{font-style:normal; margin:0 0 .9rem;}
+
+  footer{background:var(--ink); color:var(--on-dark-muted); font-size:.8rem;}
+  .foot-inner{max-width:760px; margin:0 auto; padding:1.2rem 16px calc(env(safe-area-inset-bottom) + 1.2rem);}
+  footer p{margin:0;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-inner">
+    <div>
+      <p class="society" id="soc-name">Gytte Lane Golf Society</p>
+      <p class="society-loc" id="soc-loc">Syresham, Northamptonshire</p>
+    </div>
+    <a class="back" href="/">← Back to the site</a>
+  </div>
+  <div class="stripe-band"></div>
+</header>
+
+<main>
+  <p class="eyebrow">Event fees</p>
+  <h1>Payments &amp; refunds</h1>
+
+  <div class="card">
+    <section>
+      <h2>Paying for events</h2>
+      <p>Event fees can be paid in the app by card, Apple Pay or Google Pay, or directly to the society by bank transfer. In-app payments are processed securely by Stripe; we never see or store your card details.</p>
+    </section>
+
+    <section>
+      <h2>Cancellations and refunds</h2>
+      <p>If you can't make an event, let the committee know as soon as possible. If you cancel before we've paid the course, you'll get a full refund. After that, a refund is at the committee's discretion — for example if someone takes your place.</p>
+      <p>In-app payments are refunded to the card you paid with, and usually arrive within 5–10 working days. Other payments are refunded by bank transfer.</p>
+    </section>
+
+    <section>
+      <h2>If an event is cancelled by the society</h2>
+      <p>Everyone who paid gets a full refund.</p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <address>
+        <span class="js-soc-name">Gytte Lane Golf Society</span>, <span id="soc-loc-inline">Syresham, Northamptonshire</span><br>
+        <a href="mailto:gyttelanegolf@gmail.com" id="soc-email">gyttelanegolf@gmail.com</a>
+      </address>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="stripe-band"></div>
+  <div class="foot-inner">
+    <p>© <span class="js-soc-name">Gytte Lane Golf Society</span></p>
+  </div>
+</footer>
+
+<script>
+/* Same society resolution as index.html/login.html (custom domain, then
+   subdomain, then oldest society), so another society's domain shows its
+   own name, contact and colours instead of Gytte Lane's defaults above. */
+(async () => {
+  const SUPABASE_URL = 'https://noldemdyjbwfqxkuxmvy.supabase.co';
+  const KEY = 'sb_publishable_pzqpKakNbZYprPW8XzGVNg_U9pL0Nsw';
+  const get = async q => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/societies?${q}&select=name,location,contact_email,primary_colour&limit=1`,
+      { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } });
+    return res.ok ? (await res.json())[0] || null : null;
+  };
+  try {
+    const host = location.hostname;
+    let soc = host ? await get(`custom_domain=eq.${encodeURIComponent(host)}`) : null;
+    if (!soc && host) soc = await get(`subdomain=eq.${encodeURIComponent(host.split('.')[0])}`);
+    if (!soc) soc = await get('order=created_at.asc');
+    if (!soc) return;
+    if (soc.name){
+      document.querySelectorAll('.js-soc-name, #soc-name').forEach(el => { el.textContent = soc.name; });
+      document.title = `Payments & refunds — ${soc.name}`;
+    }
+    if (soc.location){
+      document.getElementById('soc-loc').textContent = soc.location;
+      document.getElementById('soc-loc-inline').textContent = soc.location;
+    }
+    const email = document.getElementById('soc-email');
+    if (soc.contact_email){ email.textContent = soc.contact_email; email.href = `mailto:${soc.contact_email}`; }
+    if (soc.primary_colour && /^#[0-9a-f]{6}$/i.test(soc.primary_colour)){
+      document.documentElement.style.setProperty('--ink', soc.primary_colour);
+    }
+  } catch (err) {
+    console.warn('Society branding unavailable, showing defaults:', err);
+  }
+})();
+</script>
+</body>
+</html>
