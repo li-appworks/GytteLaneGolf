@@ -5155,6 +5155,15 @@ function renderPlayers(){
             <input type="checkbox" id="ep-committee-${p.id}" ${p.is_committee?'checked':''} style="width:16px;height:16px;accent-color:var(--brass);">
             <label for="ep-committee-${p.id}" style="font-size:.85rem;">Admin access</label>
           </div>
+          ${!p.email ? `
+          <div class="full" style="display:flex;align-items:center;gap:.6rem;">
+            <input type="checkbox" id="ep-welcome-${p.id}" checked style="width:16px;height:16px;accent-color:var(--brass);">
+            <label for="ep-welcome-${p.id}" style="font-size:.85rem;">Send a welcome email when an email is added</label>
+          </div>` : `
+          <div class="full" style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;">
+            <button type="button" class="committee-edit-btn" onclick="resendWelcomeEmail(${p.id}, this)">Send welcome email</button>
+            <span class="muted" style="font-size:.78rem;">${p.welcome_sent_at ? `Last sent ${fmtDate(p.welcome_sent_at.slice(0,10))}` : 'Not sent yet'}</span>
+          </div>`}
         </div>
         <div class="edit-form-actions">
           <button class="btn brass" onclick="savePlayerEdit(${p.id})">Save</button>
@@ -5460,13 +5469,35 @@ async function savePlayerEdit(id){
   if (!first_name || !last_name){ setStatus('First and last name are required.','error'); return; }
   if (email && !isValidEmail(email)){ setStatus('Enter a valid email address (no spaces), or leave it blank.','error'); return; }
   setStatus('Saving\u2026','loading');
+  const p = players.find(x => x.id === id);
+  const emailNewlyAdded = !!email && !p?.email;
+  const sendWelcome = emailNewlyAdded && active && document.getElementById('ep-welcome-'+id)?.checked;
   const { error } = await db.from('players').update({ first_name, last_name, email, handicap, handicap_source, active, is_committee }).eq('id', id);
   if (error){ console.error(error); setStatus('Save failed.','error'); return; }
-  const p = players.find(x => x.id === id);
   if (p) Object.assign(p, { first_name, last_name, email, handicap, handicap_source, active, is_committee });
+  if (sendWelcome){
+    setStatus('Saved \u2014 sending welcome email\u2026','loading');
+    const result = await sendWelcomeEmail(id);
+    setStatus(result.ok ? `Saved. Welcome email sent to ${email}.` : `Saved, but the welcome email failed: ${result.message}`, result.ok ? 'success' : 'error');
+    if (!result.ok) return;
+    await new Promise(r => setTimeout(r, 1800));
+  }
   editingPlayerIds.delete(id);
   renderPlayers();
+}
 
+async function resendWelcomeEmail(playerId, buttonEl){
+  const p = players.find(x => x.id === playerId);
+  if (!p?.email) return;
+  if (p.welcome_sent_at && !confirm(`${p.first_name} was already sent a welcome email on ${fmtDate(p.welcome_sent_at.slice(0,10))}. Send another?`)) return;
+  if (buttonEl){ buttonEl.disabled = true; buttonEl.textContent = 'Sending\u2026'; }
+  const result = await sendWelcomeEmail(playerId);
+  if (buttonEl){
+    buttonEl.textContent = result.ok ? 'Sent \u2713' : 'Send welcome email';
+    buttonEl.disabled = result.ok;
+    const note = buttonEl.nextElementSibling;
+    if (note) note.textContent = result.ok ? `Sent to ${p.email}` : `Failed: ${result.message}`;
+  }
 }
 
 async function deletePlayer(id){
@@ -5492,6 +5523,10 @@ function openAddPlayer(){
         <div><label>Last name</label><input id="np-lname" placeholder="Last name"></div>
         <div><label>Email (optional)</label><input type="email" id="np-email" placeholder="email@example.com"></div>
         <div><label>Handicap (optional)</label><input type="number" step="0.1" id="np-hcap" placeholder="e.g. 18"></div>
+        <div class="full" style="display:flex;align-items:center;gap:.6rem;">
+          <input type="checkbox" id="np-welcome" checked style="width:16px;height:16px;accent-color:var(--brass);">
+          <label for="np-welcome" style="font-size:.85rem;">Send a welcome email (if an email is entered)</label>
+        </div>
       </div>
       <div class="edit-form-actions">
         <button class="btn brass" onclick="saveNewPlayer()">Add player</button>
@@ -5512,11 +5547,40 @@ async function saveNewPlayer(){
   if (!first_name || !last_name){ setStatus('First and last name are required.','error'); return; }
   if (email && !isValidEmail(email)){ setStatus('Enter a valid email address (no spaces), or leave it blank.','error'); return; }
   setStatus('Saving\u2026','loading');
+  const sendWelcome = !!email && document.getElementById('np-welcome')?.checked;
   const { data, error } = await db.from('players').insert({ first_name, last_name, email, handicap, society_id: societyId }).select().single();
   if (error){ console.error(error); setStatus('Save failed.','error'); return; }
   if (data) players.push(data);
+  if (sendWelcome && data){
+    setStatus('Player added — sending welcome email…','loading');
+    const result = await sendWelcomeEmail(data.id);
+    setStatus(result.ok ? `Player added. Welcome email sent to ${email}.` : `Player added, but the welcome email failed: ${result.message}`, result.ok ? 'success' : 'error');
+    if (!result.ok) return; // leave the message on screen
+    await new Promise(r => setTimeout(r, 1800));
+  }
   document.getElementById('add-player-form').innerHTML = '';
   renderPlayers();
+}
+
+/* Emails a player a branded welcome via the send-welcome-email Edge
+   Function (admin-only server-side; it always uses the email stored on the
+   player row). Returns { ok, message }. */
+async function sendWelcomeEmail(playerId){
+  try {
+    const { data, error } = await db.functions.invoke('send-welcome-email', { body: { player_id: playerId } });
+    if (error || !data?.sent){
+      let message = data?.error;
+      if (!message && error?.context?.json){ try { message = (await error.context.json()).error; } catch(e){} }
+      return { ok: false, message: message || 'please try again later.' };
+    }
+    const p = players.find(x => x.id === playerId);
+    if (p) p.welcome_sent_at = new Date().toISOString();
+    logActivity('welcome_email_sent', { player_id: playerId });
+    return { ok: true };
+  } catch (err){
+    console.error('Welcome email error:', err);
+    return { ok: false, message: 'please try again later.' };
+  }
 }
 
 async function updatePlayerHandicap(playerId, rawValue){
