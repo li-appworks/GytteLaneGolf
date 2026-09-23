@@ -2233,6 +2233,7 @@ let gpsTeeHoles = [];  // shared platform-wide, not society-scoped — per-tee y
 let ratingState = {};
 let societyPaymentDetails = null;
 let eventPayments = [];
+let refunds = []; // RLS: admins see their society's, members only their own
 let expenditures = [];
 let editingExpenditureIds = new Set();
 let accountBalances = [];
@@ -2505,6 +2506,12 @@ async function loadData(){
     expenditures = [];
     recurringExpenditures = [];
   }
+  try {
+    const rfRes = await db.from('refunds').select('*').eq('society_id', societyId).order('refunded_date');
+    refunds = rfRes.data || [];
+  } catch(err){
+    refunds = [];
+  }
 
   /* account starting balances — admin-only via RLS, same graceful-empty
      pattern as payment details: a non-admin session just gets nothing back */
@@ -2631,10 +2638,11 @@ function goTo(sectionName, opts){
   if (sectionName === 'groupings') renderGroupings();
   if (sectionName === 'accounts'){
     if (db) db.from('event_payments').select('*').eq('society_id', societyId).then(({data}) => { if(data){ eventPayments = data; renderAccounts(); }});
+    refreshRefunds(renderAccounts);
     renderAccounts();
   }
   if (sectionName === 'platform') renderPlatformAdmin();
-  if (sectionName === 'myaccount') renderMyAccount();
+  if (sectionName === 'myaccount'){ refreshRefunds(renderMyAccount); renderMyAccount(); }
   setBottomNav(sectionName);
 }
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2758,16 +2766,116 @@ function updatePaymentSummary(eventId){
     ${outstanding > 0 ? `<span class="ps-outstanding">Outstanding: £${outstanding.toFixed(2)} (${rows.length-paidCnt} players)</span>` : ''}`;
 }
 
-function isPaidRecord(rec){ return rec && (rec.paid === true || rec.paid === 1 || rec.paid === 'true'); }
+/* Paid and not fully refunded. A partial refund still counts as paid. */
+function isPaidRecord(rec){
+  if (!rec || !(rec.paid === true || rec.paid === 1 || rec.paid === 'true')) return false;
+  return refundedAmount(rec) < Number(rec.amount || 0) || refundedAmount(rec) === 0;
+}
+function refundedAmount(rec){ return Number(rec?.refunded_amount || 0); }
+/* Money actually kept: amount paid less anything refunded. */
+function netCollected(rec){
+  const paid = rec && (rec.paid === true || rec.paid === 1 || rec.paid === 'true');
+  return paid ? Math.max(0, Number(rec.amount || 0) - refundedAmount(rec)) : 0;
+}
+function isSignedUp(eventId, playerId){
+  return signups.some(s => String(s.event_id) === String(eventId) && s.player_id === playerId);
+}
+/* Kept on record after the player was removed from the event (only paid
+   players' rows are kept — unpaid ones are deleted as before). Signing up
+   again un-cancels it, whether or not an admin has touched the row. */
+function isCancelledPayment(rec){ return !!rec?.cancelled_at && !isSignedUp(rec.event_id, rec.player_id); }
+function cardPaymentsEnabled(){ return !!currentSociety?.stripe_enabled; }
 
 function attendeePillLi(p, eventId, isLoggedIn, isPaid, fee){
   return `<li style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
     <span>${isPaid ? '<span class="paid-tick">✓</span>' : ''}${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
     <span style="display:flex; gap:.4rem; flex-shrink:0;">
-      ${!isPaid && fee > 0 ? `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${eventId}',${p.id},this)">Pay now</button>` : ''}
+      ${!isPaid && fee > 0 && cardPaymentsEnabled() ? `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${eventId}',${p.id},this)">Pay now</button>` : ''}
       ${isLoggedIn ? `<button class="committee-edit-btn" style="color:var(--claret); border-color:var(--claret);" onclick="removeSignup('${eventId}',${p.id})">✕ Remove</button>` : ''}
     </span>
   </li>`;
+}
+
+/* Refund status for a payment, in words. Amounts only for admins. */
+function refundStatusText(rec, showAmounts){
+  const refunded = refundedAmount(rec);
+  const amount = Number(rec.amount || 0);
+  if (!refunded) return 'Refund pending';
+  if (!showAmounts) return refunded < amount ? 'Partly refunded' : 'Refunded';
+  return refunded < amount
+    ? `Refunded £${refunded.toFixed(2)} of £${amount.toFixed(2)}`
+    : `Refunded £${refunded.toFixed(2)}`;
+}
+
+/* Players who paid, then were removed from the event. Their payment row is
+   kept so the refund (or lack of one) stays visible against them. */
+function cancelledPaymentsHtml(e){
+  const rows = eventPayments.filter(p => String(p.event_id) === String(e.id) && isCancelledPayment(p));
+  if (!rows.length) return '';
+  return `
+    <p class="attendee-group-label">Cancelled (${rows.length})</p>
+    <ul>${rows.map(rec => {
+      const p = players.find(x => x.id === rec.player_id);
+      if (!p) return '';
+      const fullyRefunded = refundedAmount(rec) >= Number(rec.amount || 0);
+      const isCard = rec.payment_method === 'stripe';
+      let action = '';
+      if (isLoggedIn && !fullyRefunded){
+        action = isCard
+          ? `<span class="muted" style="font-size:.75rem;">Refund in Stripe — updates here automatically</span>`
+          : `<button class="committee-edit-btn" onclick="recordManualRefund(${rec.id})">Record refund</button>`;
+      }
+      return `<li style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap;">
+        <span style="text-decoration:line-through; color:var(--text-muted);">${escapeHtml(p.first_name)} ${escapeHtml(p.last_name)}</span>
+        <span style="display:flex; align-items:center; gap:.5rem; font-size:.8rem;">
+          <span style="color:${fullyRefunded ? 'var(--bracken)' : 'var(--claret)'};">${refundStatusText(rec, isLoggedIn)}${isLoggedIn ? ` · ${isCard ? 'card' : 'bank'}` : ''}</span>
+          ${action}
+        </span>
+      </li>`;
+    }).join('')}</ul>`;
+}
+
+function refreshRefunds(then){
+  if (!db) return;
+  db.from('refunds').select('*').eq('society_id', societyId).order('refunded_date')
+    .then(({ data }) => { if (data){ refunds = data; then && then(); } });
+}
+
+/* Admin records a bank-transfer refund by hand (card refunds come in from
+   Stripe's webhook instead). */
+async function recordManualRefund(paymentId){
+  const rec = eventPayments.find(p => p.id === paymentId);
+  if (!rec || !db) return;
+  const remaining = Number(rec.amount || 0) - refundedAmount(rec);
+  const input = prompt(`Amount refunded to this player (£):`, remaining.toFixed(2));
+  if (input === null) return;
+  const amount = parseFloat(input);
+  if (!(amount > 0) || amount > remaining + 0.001){
+    alert(`Enter an amount between £0.01 and £${remaining.toFixed(2)}.`);
+    return;
+  }
+  const refundedDate = new Date().toISOString().slice(0, 10);
+  const { data: refund, error } = await db.from('refunds').insert({
+    society_id: societyId, event_id: rec.event_id, player_id: rec.player_id,
+    amount, refunded_date: refundedDate, method: 'manual'
+  }).select().single();
+  if (error){ console.error('Record refund error:', error); alert('Could not record the refund — please try again.'); return; }
+  const newTotal = refundedAmount(rec) + amount;
+  const { error: upErr } = await db.from('event_payments')
+    .update({ refunded_amount: newTotal, refunded_date: refundedDate })
+    .eq('id', rec.id);
+  if (upErr){
+    console.error('Update refunded amount error:', upErr);
+    await db.from('refunds').delete().eq('id', refund.id);
+    alert('Could not record the refund — please try again.');
+    return;
+  }
+  rec.refunded_amount = newTotal;
+  rec.refunded_date = refundedDate;
+  refunds.push(refund);
+  logActivity('refund_recorded', { event_id: rec.event_id, player_id: rec.player_id, amount, method: 'manual' });
+  renderEvents();
+  if (typeof renderAccounts === 'function') renderAccounts();
 }
 
 /* Groups attendees into "Paid" / "Awaiting payment" so it's obvious at a
@@ -3050,6 +3158,7 @@ function eventDetailHtml(e){
             ${attendees.length
               ? renderAttendeeGroups(attendees, paidIds, e.id, isLoggedIn, fee)
               : '<p class="muted">No one signed up yet — be the first.</p>'}
+            ${cancelledPaymentsHtml(e)}
           </div>
           ${isLoggedIn && signedUp.length ? `
             <div class="edit-form" style="margin-top:.8rem;">
@@ -3129,7 +3238,13 @@ async function payWithStripe(eventId, playerId, buttonEl){
 async function removeSignup(eventId, playerId){
   const p = players.find(x => x.id === playerId);
   const name = p ? `${p.first_name} ${p.last_name}` : 'this player';
-  if (!confirm(`Remove ${name} from this event?`)) return;
+  const payment = eventPayments.find(x => String(x.event_id) === String(eventId) && x.player_id === playerId);
+  const hasPaid = isPaidRecord(payment);
+  const isCard = payment?.payment_method === 'stripe';
+  const question = hasPaid
+    ? `${name} has paid £${Number(payment.amount).toFixed(2)} ${isCard ? 'by card' : 'by bank transfer'}.\n\nRemove them from this event? They'll be listed as cancelled, and the refund will show against them once it's made.`
+    : `Remove ${name} from this event?`;
+  if (!confirm(question)) return;
   if (!db) return;
   const { error, count } = await db.from('signups').delete()
     .eq('event_id', eventId)
@@ -3138,14 +3253,24 @@ async function removeSignup(eventId, playerId){
   if (error){ console.error('Remove signup error:', error); alert('Could not remove — please try again.'); return; }
   signups = signups.filter(s => !(s.event_id === eventId && s.player_id === playerId));
 
-  /* also drop any payment record for them on this event — otherwise it's
-     left orphaned and still counts as "outstanding" on the Accounts page
-     even though they're no longer signed up at all. */
-  const { error: payError } = await db.from('event_payments').delete()
-    .eq('event_id', eventId)
-    .eq('player_id', playerId);
-  if (payError) console.warn('Could not remove orphaned payment record:', payError);
-  eventPayments = eventPayments.filter(p => !(String(p.event_id) === String(eventId) && p.player_id === playerId));
+  if (hasPaid){
+    /* Paid: keep the payment, marked cancelled, so the money and its refund
+       stay on record against the player. */
+    const cancelledAt = new Date().toISOString();
+    const { error: payError } = await db.from('event_payments').update({ cancelled_at: cancelledAt }).eq('id', payment.id);
+    if (payError) console.warn('Could not mark payment as cancelled:', payError);
+    else payment.cancelled_at = cancelledAt;
+    logActivity('signup_cancelled', { event_id: eventId, player_id: playerId, paid: true, method: payment.payment_method });
+    if (isCard) alert(`Now refund ${name} in the Stripe dashboard (Payments → find the payment → Refund). It will show as refunded here automatically.`);
+  } else {
+    /* Unpaid: drop the payment record, otherwise it's left orphaned and still
+       counts as "outstanding" on the Accounts page. */
+    const { error: payError } = await db.from('event_payments').delete()
+      .eq('event_id', eventId)
+      .eq('player_id', playerId);
+    if (payError) console.warn('Could not remove orphaned payment record:', payError);
+    eventPayments = eventPayments.filter(p => !(String(p.event_id) === String(eventId) && p.player_id === playerId));
+  }
 
   renderEvents();
 }
@@ -5213,11 +5338,39 @@ function myAccountSignupsTab(p){
         <div class="pli-right">
           ${!fee ? '' : isPaid
             ? `<span class="membership-pill paid">Paid</span>`
-            : `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${ev.id}',${p.id},this)">Pay now</button>`}
+            : cardPaymentsEnabled()
+              ? `<button class="committee-edit-btn" style="color:var(--bracken); border-color:var(--bracken);" onclick="payWithStripe('${ev.id}',${p.id},this)">Pay now</button>`
+              : `<span class="membership-pill unpaid">Not paid</span>`}
         </div>
       </div>`;
   }).filter(Boolean).join('');
-  return rows || '<p class="muted">You’re not signed up for any events yet.</p>';
+  return (rows || '<p class="muted">You’re not signed up for any events yet.</p>') + myRefundsHtml(p);
+}
+
+/* This player's cancelled payments and every refund they've had —
+   including refunds on events they later re-joined and paid for again. */
+function myRefundsHtml(p){
+  const cancelled = eventPayments.filter(r => r.player_id === p.id && isCancelledPayment(r));
+  const myRefunds = refunds.filter(r => r.player_id === p.id);
+  const eventIds = [...new Set([...cancelled.map(r => String(r.event_id)), ...myRefunds.map(r => String(r.event_id))])];
+  if (!eventIds.length) return '';
+  const items = eventIds.map(eid => {
+    const ev = eventById(eid);
+    const rec = cancelled.find(r => String(r.event_id) === eid);
+    const lines = myRefunds.filter(r => String(r.event_id) === eid).map(r =>
+      `Refunded £${Number(r.amount).toFixed(2)} on ${fmtDate(r.refunded_date)} (${r.method === 'stripe' ? 'to your card' : 'bank transfer'})`);
+    if (rec && !lines.length) lines.push(refundStatusText(rec, true));
+    const status = rec ? `Cancelled${rec.cancelled_at ? ` ${fmtDate(rec.cancelled_at.slice(0, 10))}` : ''}` : '';
+    return `
+      <div class="player-list-item" style="cursor:default;">
+        <div class="pli-info">
+          <div class="pli-name">${escapeHtml(ev ? ev.name : 'Event')}</div>
+          <div class="pli-sub">${[ev ? fmtDate(ev.date) : '', status].filter(Boolean).join(' · ')}</div>
+          ${lines.map(l => `<div class="pli-sub">${escapeHtml(l)}</div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+  return `<h4 style="margin:1.4rem 0 .5rem;">Cancellations &amp; refunds</h4>${items}`;
 }
 
 function myAccountHistoryTab(p){
@@ -8755,18 +8908,21 @@ async function togglePayment(eventId, playerId, amountOrEl, paid){
   );
 
   if (existing){
-    const { error } = await db.from('event_payments')
-      .update({ paid, amount, paid_date: paid ? new Date().toISOString().slice(0,10) : null })
-      .eq('id', existing.id);
+    const changes = { paid, amount, paid_date: paid ? new Date().toISOString().slice(0,10) : null };
+    /* Re-joined after a full refund: this is a new payment, so clear the old
+       refund/cancellation state (the refunds table keeps the history). */
+    if (paid && refundedAmount(existing) > 0 && refundedAmount(existing) >= Number(existing.amount || 0)){
+      Object.assign(changes, { payment_method: 'manual', cancelled_at: null, refunded_amount: 0, refunded_date: null, stripe_session_id: null, stripe_payment_intent: null });
+    }
+    const { error } = await db.from('event_payments').update(changes).eq('id', existing.id);
     if (error){ console.error('Update error:', error); alert('Could not save: ' + error.message); return; }
-    existing.paid = paid;
-    existing.amount = amount;
-    existing.paid_date = paid ? new Date().toISOString().slice(0,10) : null;
+    Object.assign(existing, changes);
   } else {
     const { data, error } = await db.from('event_payments')
       .insert({ event_id: eventId, player_id: playerId, amount, paid, society_id: societyId, paid_date: paid ? new Date().toISOString().slice(0,10) : null })
       .select().single();
     if (error){ console.error('Insert error:', error); alert('Could not save: ' + error.message); return; }
+    if (data) eventPayments.push(data);
   }
   logActivity('payment_marked', { event_id: eventId, player_id: playerId, paid, amount });
   /* update row styling and summary directly */
@@ -9064,6 +9220,13 @@ function platformSocietyRowHtml(soc){
         <div class="full"><label>About blurb</label><textarea id="ps-intro-${soc.id}">${escapeHtml(soc.intro_text||'')}</textarea></div>
         <div><label>Primary colour</label><input type="color" id="ps-primary-${soc.id}" value="${soc.primary_colour||'#4B1320'}"></div>
         <div><label>Secondary colour</label><input type="color" id="ps-secondary-${soc.id}" value="${soc.secondary_colour||'#B8862F'}"></div>
+        <div class="full">
+          <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer;">
+            <input type="checkbox" id="ps-stripe-${soc.id}" ${soc.stripe_enabled ? 'checked' : ''} style="width:auto;">
+            Card payments (Stripe) enabled
+          </label>
+          <p class="muted" style="font-size:.78rem; margin-top:.3rem;">Shows "Pay now" on this society's events. Card payments go into the platform's single Stripe account, so only switch this on for a society that account belongs to.</p>
+        </div>
       </div>
       <div class="edit-form-actions">
         <button class="btn brass" onclick="savePlatformSociety('${soc.id}')">Save</button>
@@ -9077,7 +9240,7 @@ function platformSocietyRowHtml(soc){
       <div class="pli-ini" style="background:${soc.primary_colour||'var(--ink)'};">${escapeHtml((soc.name||'?')[0])}</div>
       <div class="pli-info">
         <div class="pli-name">${escapeHtml(soc.name)}</div>
-        <div class="pli-sub">${escapeHtml(soc.subdomain||'no subdomain')}${soc.custom_domain ? ' · ' + escapeHtml(soc.custom_domain) : ''}${soc.founded ? ' · founded ' + soc.founded : ''}</div>
+        <div class="pli-sub">${escapeHtml(soc.subdomain||'no subdomain')}${soc.custom_domain ? ' · ' + escapeHtml(soc.custom_domain) : ''}${soc.founded ? ' · founded ' + soc.founded : ''}${soc.stripe_enabled ? ' · <strong>Card payments on</strong>' : ''}</div>
       </div>
       <div class="pli-right">
         <button class="committee-edit-btn" onclick="${isEditing ? `editingSocietyIds.delete('${soc.id}')` : `editingSocietyIds.add('${soc.id}')`}; renderPlatformAdmin();">${isEditing ? 'Cancel' : 'Edit'}</button>
@@ -9104,12 +9267,13 @@ async function savePlatformSociety(id){
   const intro_text = document.getElementById('ps-intro-'+id)?.value.trim() || null;
   const primary_colour = document.getElementById('ps-primary-'+id)?.value;
   const secondary_colour = document.getElementById('ps-secondary-'+id)?.value;
+  const stripe_enabled = !!document.getElementById('ps-stripe-'+id)?.checked;
   if (!name){ setStatus('Name is required.', 'error'); return; }
   if (contact_email && !isValidEmail(contact_email)){ setStatus('Enter a valid contact email, or leave it blank.', 'error'); return; }
   setStatus('Saving…', 'loading');
   const { error } = await db.from('societies').update({
     name, founded: founded ? Number(founded) : null, subdomain, custom_domain,
-    location, contact_email, tagline, intro_text, primary_colour, secondary_colour
+    location, contact_email, tagline, intro_text, primary_colour, secondary_colour, stripe_enabled
   }).eq('id', id);
   if (error){ console.error(error); setStatus('Save failed.', 'error'); return; }
   editingSocietyIds.delete(id);
@@ -9118,6 +9282,7 @@ async function savePlatformSociety(id){
   if (id === societyId){
     currentSociety = allSocieties.find(s => s.id === id) || currentSociety;
     applyBranding(currentSociety);
+    renderEvents();
   }
 }
 
@@ -9189,6 +9354,21 @@ async function saveNewSociety(){
   renderPlatformAdmin();
 }
 
+/* One event's money: collected = paid less refunds (cancelled players
+   included — that money was really taken); outstanding = what signed-up
+   players still owe (cancelled players owe nothing). */
+function eventIncome(e, fee, signedUpCount){
+  const all = eventPayments.filter(p => String(p.event_id) === String(e.id));
+  const active = all.filter(p => !isCancelledPayment(p));
+  const collected = all.reduce((s,p) => s + netCollected(p), 0);
+  const refundedTotal = all.reduce((s,p) => s + refundedAmount(p), 0);
+  const paidCount = active.filter(isPaidRecord).length;
+  const outstanding = active.length
+    ? active.reduce((s,p) => s + (isPaidRecord(p) ? 0 : Number(p.amount || fee)), 0)
+    : signedUpCount * fee;
+  return { collected, expected: collected + outstanding, outstanding, paidCount, refundedTotal };
+}
+
 function renderAccounts(){
   const el = document.getElementById('accounts-content');
   if (!el) return;
@@ -9236,19 +9416,12 @@ function renderAccounts(){
   /* income: all events in this year where payments have been received */
   const yearEvents = events.filter(e => new Date(e.date+'T00:00:00').getFullYear() === accountsYear);
   const incomeRows = yearEvents.map(e => {
-    const eid = String(e.id);
-    const paidList = eventPayments.filter(p => String(p.event_id) === eid && isPaidRecord(p));
-    const allPayments = eventPayments.filter(p => String(p.event_id) === eid);
-    const collected = paidList.reduce((s,p) => s + Number(p.amount||0), 0);
     const fee = parseFloat((e.cost||'').replace(/[^0-9.]/g,'')) || 0;
     const signedUp = signupsForEvent(e.id).length;
-    const expected = allPayments.length
-      ? allPayments.reduce((s,p) => s + Number(p.amount||fee), 0)
-      : signedUp * fee;
-    const outstanding = expected - collected;
+    const { collected, expected, outstanding, paidCount, refundedTotal } = eventIncome(e, fee, signedUp);
     return {
       label: e.name,
-      sub: `${paidList.length}/${signedUp} paid · £${collected.toFixed(2)} collected${outstanding > 0 ? ` · £${outstanding.toFixed(2)} outstanding` : ''}`,
+      sub: `${paidCount}/${signedUp} paid · £${collected.toFixed(2)} collected${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}${outstanding > 0 ? ` · £${outstanding.toFixed(2)} outstanding` : ''}`,
       amount: collected,
       expected,
       outstanding
@@ -9593,16 +9766,11 @@ async function downloadAccountsPdf(year){
   /* income — same richer breakdown (with outstanding) as the on-screen report */
   const yearEvents = events.filter(e => new Date(e.date+'T00:00:00').getFullYear() === yr);
   const incomeRows = yearEvents.map(e => {
-    const eid = String(e.id);
-    const paidList = eventPayments.filter(p => String(p.event_id) === eid && isPaidRecord(p));
-    const allPayments = eventPayments.filter(p => String(p.event_id) === eid);
-    const collected = paidList.reduce((s,p) => s + Number(p.amount||0), 0);
     const fee = parseFloat((e.cost||'').replace(/[^0-9.]/g,'')) || 0;
     const signedUp = signupsForEvent(e.id).length;
-    const expected = allPayments.length ? allPayments.reduce((s,p) => s + Number(p.amount||fee), 0) : signedUp * fee;
-    const outstanding = expected - collected;
+    const { collected, outstanding, paidCount, refundedTotal } = eventIncome(e, fee, signedUp);
     return collected > 0 || outstanding > 0
-      ? { label: e.name, sub: `${paidList.length}/${signedUp} paid`, amount: collected, outstanding }
+      ? { label: e.name, sub: `${paidCount}/${signedUp} paid${refundedTotal > 0 ? ` · £${refundedTotal.toFixed(2)} refunded` : ''}`, amount: collected, outstanding }
       : null;
   }).filter(Boolean);
   const membersPaidPdf = players.filter(p => p.membership_paid_year === yr);
