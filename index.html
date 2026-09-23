@@ -2792,6 +2792,10 @@ function isSignedUp(eventId, playerId){
    again un-cancels it, whether or not an admin has touched the row. */
 function isCancelledPayment(rec){ return !!rec?.cancelled_at && !isSignedUp(rec.event_id, rec.player_id); }
 function cardPaymentsEnabled(){ return !!currentSociety?.stripe_enabled; }
+/* Platform-admin switch per society. Off hides everything GPS-specific
+   (distance card, location tracking, GPS status/pins UI); scorecard data
+   (par, stroke index, yardage) is unaffected — net scoring needs it. */
+function gpsEnabled(){ return !!currentSociety?.gps_enabled; }
 /* payment_method is 'in_app' (paid through the app's payment system — has a
    fee, refunded through Stripe) or 'other' (anything else). Only in-app gets
    a visible tag; 'other' is the unremarkable default. */
@@ -3796,7 +3800,7 @@ function evwRenderStep(){
   const s = EVW_STEPS[evwStepIndex];
   const inSubView = s === 'course' ? evwSubView : null;
   const subMeta = {
-    newCourseClub: { label:'New club & course', title:'Add it here', sub:"Not on the list yet — add the club, and we'll try to find its scorecard and GPS data automatically." },
+    newCourseClub: { label:'New club & course', title:'Add it here', sub:`Not on the list yet — add the club, and we'll try to find its scorecard${gpsEnabled() ? ' and GPS data' : ''} automatically.` },
     browseCourses: { label:'Browse clubs', title:'Pick from the list', sub:'Every course already in your library — tap one to select it.' },
   };
 
@@ -4085,8 +4089,8 @@ function evwNewCourseClubHtml(){
       ${evwFld('Postcode', `<input type="text" placeholder="e.g. MK17 9LJ" value="${evwEsc(evwNewClub.postcode)}" oninput="evwNewClub.postcode=this.value" ${evwNewClub.createdCourse?'disabled':''}>`)}
       ${!evwNewClub.createdCourse ? `<button class="evw-chip" style="margin-top:10px;" onclick="evwLookUpNewClub()">🔍 Look up course data</button>` : ''}
       ${evwNewClub.status==='looking' ? `<p style="font-size:.78rem; color:rgba(250,248,242,.6); margin-top:10px;">⏳ Checking OpenStreetMap…</p>` : ''}
-      ${evwNewClub.status==='found' ? `<p style="font-size:.78rem; color:#8FE3A9; margin-top:10px;">✓ Found it — scorecard and GPS pins are ready to use.</p>` : ''}
-      ${evwNewClub.status==='none' ? `<p style="font-size:.78rem; color:var(--brass-light); margin-top:10px;">No data found automatically — that's fine, add the scorecard and GPS pins by hand later from the Courses page.</p>` : ''}
+      ${evwNewClub.status==='found' ? `<p style="font-size:.78rem; color:#8FE3A9; margin-top:10px;">✓ Found it — scorecard${gpsEnabled() ? ' and GPS pins are' : ' is'} ready to use.</p>` : ''}
+      ${evwNewClub.status==='none' ? `<p style="font-size:.78rem; color:var(--brass-light); margin-top:10px;">No data found automatically — that's fine, add the scorecard${gpsEnabled() ? ' and GPS pins' : ''} by hand later from the Courses page.</p>` : ''}
     </div>
     <div class="evw-nav" style="padding:0;">
       <button onclick="evwCloseNewCourseClub(false)">Cancel</button>
@@ -5912,7 +5916,7 @@ function manageLeaderboardPoll(){
    it isn't. Mirrors manageLeaderboardPoll()'s start/stop pattern above. */
 function manageFocusGpsWatch(){
   const shouldWatch = scoringFocusMode && liveSubView === 'entry' && !handicapConfirmQueue.length
-    && !!navigator.geolocation;
+    && !!navigator.geolocation && gpsEnabled();
   if (shouldWatch && focusGeoWatchId === null){
     focusGeoWatchId = navigator.geolocation.watchPosition(
       pos => { focusPlayerPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; renderGpsCardOnly(); },
@@ -6665,6 +6669,7 @@ function focusTopBarHtml(mode, liveLabel){
    so manageFocusGpsWatch() can patch just this slot on every position
    update without re-rendering (and losing focus in) the strokes stepper. */
 function gpsCardInnerHtml(){
+  if (!gpsEnabled()) return '';
   const activeRound = liveRoundId ? rounds.find(r => r.id === liveRoundId) : null;
   const ev = eventById(liveEventId);
   const hole = courseHoleFor(activeRound, ev, currentHole);
@@ -8180,6 +8185,7 @@ async function autoSetupGpsForCourse(course){
 }
 
 function courseGpsStatusBadgeHtml(course){
+  if (!gpsEnabled()) return '';
   const status = courseGpsAutoStatus[course.id];
   if (status === 'checking' || status === 'importing'){
     return `<div class="course-card-none">⏳ ${status === 'checking' ? 'Checking for existing GPS data…' : 'Importing GPS data from OpenStreetMap…'}</div>`;
@@ -8436,9 +8442,10 @@ function gpsSetupPanelHtml(course){
         <p class="muted" style="font-size:.76rem; margin:0 0 .4rem;">Yardage per hole, by tee position (White, Yellow, Red…) — what players see on the scorecard, and where distance-to-green is measured from.</p>
         ${teesEditorHtml(course.gps_course_id)}
 
+        ${gpsEnabled() ? `
         <h5 style="margin:1rem 0 .2rem;">GPS pins</h5>
         <p class="muted" style="font-size:.76rem; margin:0 0 .4rem;">Green location per hole — only used for the live distance readout while scoring. Import gets you most of the way; fix anything by hand below.</p>
-        ${gpsPinsEditorHtml(course.gps_course_id)}
+        ${gpsPinsEditorHtml(course.gps_course_id)}` : ''}
 
         <button class="delete-btn" style="margin-top:.6rem;" onclick="unlinkGpsCourse(${course.id})">Unlink this course's data</button>
       </div>`;
@@ -8471,7 +8478,7 @@ function gpsSetupPanelHtml(course){
   return `
     <div class="edit-form" style="margin:.5rem 0;">
       <h4>Manage course data</h4>
-      <p class="muted" style="font-size:.8rem; margin:0 0 .6rem;">Scorecard (par/stroke index), tee yardages, and GPS pins (green location) are all shared across every society on the platform. This runs automatically when a postcode is added — use this if that didn't find anything, or to make a correction by hand.</p>
+      <p class="muted" style="font-size:.8rem; margin:0 0 .6rem;">Scorecard (par/stroke index)${gpsEnabled() ? ', tee yardages, and GPS pins (green location) are' : ' and tee yardages are'} all shared across every society on the platform. This runs automatically when a postcode is added — use this if that didn't find anything, or to make a correction by hand.</p>
 
       ${course.postcode
         ? `<div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
@@ -9240,6 +9247,13 @@ function platformSocietyRowHtml(soc){
           </label>
           <p class="muted" style="font-size:.78rem; margin-top:.3rem;">Shows "Pay now" on this society's events. Card payments go into the platform's single Stripe account, so only switch this on for a society that account belongs to.</p>
         </div>
+        <div class="full">
+          <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer;">
+            <input type="checkbox" id="ps-gps-${soc.id}" ${soc.gps_enabled ? 'checked' : ''} style="width:auto;">
+            GPS distances enabled
+          </label>
+          <p class="muted" style="font-size:.78rem; margin-top:.3rem;">Shows the distance-to-green card while scoring, and GPS status/pins on the Courses page. Scorecards (par, stroke index, yardage) are unaffected.</p>
+        </div>
       </div>
       <div class="edit-form-actions">
         <button class="btn brass" onclick="savePlatformSociety('${soc.id}')">Save</button>
@@ -9253,7 +9267,7 @@ function platformSocietyRowHtml(soc){
       <div class="pli-ini" style="background:${soc.primary_colour||'var(--ink)'};">${escapeHtml((soc.name||'?')[0])}</div>
       <div class="pli-info">
         <div class="pli-name">${escapeHtml(soc.name)}</div>
-        <div class="pli-sub">${escapeHtml(soc.subdomain||'no subdomain')}${soc.custom_domain ? ' · ' + escapeHtml(soc.custom_domain) : ''}${soc.founded ? ' · founded ' + soc.founded : ''}${soc.stripe_enabled ? ' · <strong>Card payments on</strong>' : ''}</div>
+        <div class="pli-sub">${escapeHtml(soc.subdomain||'no subdomain')}${soc.custom_domain ? ' · ' + escapeHtml(soc.custom_domain) : ''}${soc.founded ? ' · founded ' + soc.founded : ''}${soc.stripe_enabled ? ' · <strong>Card payments on</strong>' : ''}${soc.gps_enabled ? ' · <strong>GPS on</strong>' : ''}</div>
       </div>
       <div class="pli-right">
         <button class="committee-edit-btn" onclick="${isEditing ? `editingSocietyIds.delete('${soc.id}')` : `editingSocietyIds.add('${soc.id}')`}; renderPlatformAdmin();">${isEditing ? 'Cancel' : 'Edit'}</button>
@@ -9281,12 +9295,13 @@ async function savePlatformSociety(id){
   const primary_colour = document.getElementById('ps-primary-'+id)?.value;
   const secondary_colour = document.getElementById('ps-secondary-'+id)?.value;
   const stripe_enabled = !!document.getElementById('ps-stripe-'+id)?.checked;
+  const gps_enabled = !!document.getElementById('ps-gps-'+id)?.checked;
   if (!name){ setStatus('Name is required.', 'error'); return; }
   if (contact_email && !isValidEmail(contact_email)){ setStatus('Enter a valid contact email, or leave it blank.', 'error'); return; }
   setStatus('Saving…', 'loading');
   const { error } = await db.from('societies').update({
     name, founded: founded ? Number(founded) : null, subdomain, custom_domain,
-    location, contact_email, tagline, intro_text, primary_colour, secondary_colour, stripe_enabled
+    location, contact_email, tagline, intro_text, primary_colour, secondary_colour, stripe_enabled, gps_enabled
   }).eq('id', id);
   if (error){ console.error(error); setStatus('Save failed.', 'error'); return; }
   editingSocietyIds.delete(id);
@@ -9296,6 +9311,7 @@ async function savePlatformSociety(id){
     currentSociety = allSocieties.find(s => s.id === id) || currentSociety;
     applyBranding(currentSociety);
     renderEvents();
+    renderCoursesPanel();
   }
 }
 
