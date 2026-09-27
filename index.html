@@ -844,6 +844,7 @@
   .status-line{font-family:var(--body); font-size:.74rem; font-weight:600; display:inline-flex; align-items:center; gap:.25rem; white-space:nowrap;}
   .status-line.ok{color:var(--bracken);}
   .status-line.pending{color:var(--text-muted); font-weight:500;}
+  .status-line.none{color:var(--claret); font-weight:500;}
   .pli-expanded{background:var(--stone);border-bottom:0.5px solid var(--line);padding:.65rem .8rem .65rem 3.4rem;}
   .player-list-item.expanded .pli-ini{background:var(--claret);}
   .pli-expanded .pc-tabs{margin-bottom:.55rem;}
@@ -5215,8 +5216,10 @@ function renderPlayers(){
           <div class="pli-badges">
             ${isLoggedIn ? (p.has_password
               ? `<span class="status-line ok" title="Has set up a password and can sign in">✓ Login</span>`
-              : `<span class="status-line pending" title="Hasn't set up a password yet — can't sign in">Login</span>`) : ''}
-            ${isPaid ? `<span class="status-line ok" title="Has paid their annual membership for ${currentYear}">✓ Member</span>` : ''}
+              : p.welcome_sent_at
+                ? `<span class="status-line pending" title="Sent a welcome email on ${fmtDate(p.welcome_sent_at.slice(0,10))} — hasn't finished setting up yet">Invited</span>`
+                : `<span class="status-line none" title="No welcome email sent yet — nothing to invite them with">Not invited</span>`) : ''}
+            ${isPaid ? `<span class="status-line ok" title="Has paid their annual membership for ${currentYear}">✓ ${currentYear} member</span>` : ''}
           </div>
           <i class="ti ti-chevron-${isExpanded?'up':'down'}" style="font-size:14px;color:var(--text-muted);" aria-hidden="true"></i>
         </div>
