@@ -5205,6 +5205,9 @@ function renderPlayers(){
           <div class="pli-sub">${hcap} · ${attended} event${attended===1?'':'s'}</div>
         </div>
         <div class="pli-right">
+          ${isLoggedIn ? (p.has_password
+            ? `<span class="membership-pill paid" title="Has set a password">🔑 Set up</span>`
+            : `<span class="membership-pill unpaid" title="Hasn't set a password yet">Not set up</span>`) : ''}
           ${isPaid ? `<span class="membership-pill paid">Membership paid</span>` : ''}
           <i class="ti ti-chevron-${isExpanded?'up':'down'}" style="font-size:14px;color:var(--text-muted);" aria-hidden="true"></i>
         </div>
