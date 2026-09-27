@@ -5214,9 +5214,9 @@ function renderPlayers(){
         <div class="pli-right">
           <div class="pli-badges">
             ${isLoggedIn ? (p.has_password
-              ? `<span class="status-line ok" title="Has set a password">✓ Login</span>`
-              : `<span class="status-line pending" title="Hasn't set a password yet">Login</span>`) : ''}
-            ${isPaid ? `<span class="status-line ok">✓ Member</span>` : ''}
+              ? `<span class="status-line ok" title="Has set up a password and can sign in">✓ Login</span>`
+              : `<span class="status-line pending" title="Hasn't set up a password yet — can't sign in">Login</span>`) : ''}
+            ${isPaid ? `<span class="status-line ok" title="Has paid their annual membership for ${currentYear}">✓ Member</span>` : ''}
           </div>
           <i class="ti ti-chevron-${isExpanded?'up':'down'}" style="font-size:14px;color:var(--text-muted);" aria-hidden="true"></i>
         </div>
