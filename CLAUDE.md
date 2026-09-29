@@ -252,7 +252,7 @@ iOS 26 Safari and Home Screen web apps ignore `theme-color` (and the manifest's 
 
 ## Next-event tile: signed-up status (2026-09-29)
 
-The Home page's Next Event tile (`renderHome()`) shows a small pill for any signed-in member (`isMember` + `myAccountPlayer()` finds their row): “✓ You're signed up” (gold) if `isSignedUp(upcoming.id, me.id)`, or “You're not signed up yet” (muted) if not — a light nudge, not a warning. Nothing shows for a signed-out visitor. Verified live in the browser against real Autumn Trophy signup data for both states plus the signed-out case.
+The Home page's Next Event tile (`renderHome()`) shows a flag-tail ribbon on the photo's bottom-right corner (`.fixture-you-ribbon`) for a signed-in member (`isMember` + `myAccountPlayer()`) who's actually signed up (`isSignedUp(upcoming.id, me.id)`) — nothing shown otherwise (not signed up, or signed out), since a negative-state ribbon read oddly against the celebratory shape; the existing "Sign up & all events" link is the only nudge for everyone else. Mocked up against 8 placement options (A–H, text-side and photo-side) as a shared Artifact before building — the user picked H (straight ribbon, bottom-right of the photo, flag-tail notch) over an earlier diagonal top-right version (G). Verified live against real signup data for all three states (signed up / not signed up / signed out) and that the ribbon stays clipped within the photo's diagonal edge.
 
 ## Known follow-up work (not yet done)
 
