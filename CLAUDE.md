@@ -250,6 +250,10 @@ iOS 26 Safari and Home Screen web apps ignore `theme-color` (and the manifest's 
 - `login.html`: `html{background-color}` = brand colour (CSS, `applyLoginPageBranding()`, and the edge function's first-paint style), the gradient starts on exactly that colour so there's no seam, and a mostly off-screen `.chin-tint` fixed black strip tints the bottom toolbar to match the page's black bottom.
 - Any new full-screen page: set the root background-color to whatever colour the top of the page is. Only a real device can verify this; desktop previews can't show it.
 
+## Next-event tile: signed-up status (2026-09-29)
+
+The Home page's Next Event tile (`renderHome()`) shows a small pill for any signed-in member (`isMember` + `myAccountPlayer()` finds their row): “✓ You're signed up” (gold) if `isSignedUp(upcoming.id, me.id)`, or “You're not signed up yet” (muted) if not — a light nudge, not a warning. Nothing shows for a signed-out visitor. Verified live in the browser against real Autumn Trophy signup data for both states plus the signed-out case.
+
 ## Known follow-up work (not yet done)
 
 - **Match Play scoring** — schema/dropdown-only (see GPS distances + proper scoring above): `events.scoring_format` accepts `'match_play'` and it's selectable in the admin UI, but there's no actual head-to-head pairing or hole-by-hole up/down leaderboard built yet. Needs a pairing concept (which two players/teams face off) added to the groupings UI before this is real.

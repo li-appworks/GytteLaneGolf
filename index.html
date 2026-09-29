@@ -313,6 +313,13 @@
     color:var(--on-dark-muted);
   }
   .fixture-countdown.today .cd-num{font-size:1.4rem;}
+  .fixture-you{
+    display:inline-flex; align-items:center; gap:.35rem; margin-top:.5rem;
+    font-family:var(--body); font-size:.78rem; font-weight:600;
+    padding:.3rem .65rem; border-radius:999px;
+  }
+  .fixture-you.yes{background:color-mix(in srgb, var(--brass) 22%, transparent); color:var(--brass-light);}
+  .fixture-you.no{background:rgba(255,255,255,.1); color:var(--on-dark-muted); font-weight:500;}
 
   .welcome-banner{
     display:flex; align-items:center; justify-content:space-between; gap:.8rem; flex-wrap:wrap;
@@ -5643,6 +5650,15 @@ function renderHome(){
     const now = new Date(); now.setHours(0,0,0,0);
     const evDate = new Date(upcoming.date + 'T00:00:00');
     const daysTo = Math.round((evDate - now) / 86400000);
+    let youHtml = '';
+    if (isMember){
+      const me = myAccountPlayer();
+      if (me){
+        youHtml = isSignedUp(upcoming.id, me.id)
+          ? `<div class="fixture-you yes">✓ You're signed up</div>`
+          : `<div class="fixture-you no">You're not signed up yet</div>`;
+      }
+    }
     let countdownHtml = '';
     if (daysTo === 0){
       countdownHtml = `<div class="fixture-countdown today"><span class="cd-num">Today!</span><span class="cd-label">Good luck out there</span></div>`;
@@ -5658,6 +5674,7 @@ function renderHome(){
         <div class="next-fixture-content">
           <div class="label">Next event</div>
           <h3>${upcoming.name}</h3>
+          ${youHtml}
           <dl>
             <dt>Date</dt><dd>${fmtDate(upcoming.date)}</dd>
             <dt>Course</dt><dd>${upcoming.course || 'TBC'}</dd>
