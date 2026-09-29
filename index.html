@@ -284,7 +284,7 @@
   }
   .next-fixture-content{padding:1.5rem 1.6rem; flex:1 1 auto; min-width:0;}
   .next-fixture-photo{
-    flex:0 0 38%; position:relative; min-width:110px; overflow:hidden;
+    flex:0 0 41%; position:relative; min-width:110px; overflow:hidden;
     clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%);
     background:var(--ink);
   }
@@ -304,7 +304,7 @@
   }
   .next-fixture-photo img{width:100%; height:100%; display:block; object-fit:cover;}
   @media (max-width:480px){
-    .next-fixture-photo{flex-basis:32%;}
+    .next-fixture-photo{flex-basis:36%;}
   }
   .next-fixture .label{
     font-family:var(--body); font-size:.72rem; text-transform:uppercase; letter-spacing:.1em;
@@ -5658,9 +5658,11 @@ function renderHome(){
     const evDate = new Date(upcoming.date + 'T00:00:00');
     const daysTo = Math.round((evDate - now) / 86400000);
     let youRibbon = '';
+    let iAmSignedUp = false;
     if (isMember){
       const me = myAccountPlayer();
       if (me && isSignedUp(upcoming.id, me.id)){
+        iAmSignedUp = true;
         youRibbon = `<div class="fixture-you-ribbon">✓ Signed up</div>`;
       }
     }
@@ -5685,7 +5687,7 @@ function renderHome(){
             <dt>Format</dt><dd>${upcoming.format || 'TBC'}</dd>
           </dl>
           ${countdownHtml}
-          <div style="margin-top:.7rem;"><a href="#" onclick="event.stopPropagation(); goTo('events'); return false;">Sign up &amp; all events &rarr;</a></div>
+          <div style="margin-top:.7rem;"><a href="#" onclick="event.stopPropagation(); goTo('events'); return false;">${iAmSignedUp ? 'See all events' : 'Sign up &amp; all events'} &rarr;</a></div>
         </div>
         <div class="next-fixture-photo">${NEXT_FIXTURE_PHOTO_SVG}${youRibbon}</div>
       </div>`;
